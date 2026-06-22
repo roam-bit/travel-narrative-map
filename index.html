@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>旅行叙事地图 · Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #0d1117; overflow: hidden; }
+  #map { position: absolute; inset: 0; }
+
+  /* 顶部进度 */
+  #topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 20; padding: 16px 20px;
+    background: linear-gradient(#0d1117cc, transparent); color: #fff; display: flex; align-items: center; gap: 14px; pointer-events: none; }
+  #topbar .ttl { font-size: 17px; font-weight: 600; text-shadow: 0 1px 4px #000; }
+  #progress { flex: 1; height: 4px; background: #ffffff33; border-radius: 2px; overflow: hidden; max-width: 360px; }
+  #progress > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg,#ff9d4d,#ffd06b); transition: width .6s; }
+  #counter { font-size: 13px; color: #ffffffaa; }
+
+  /* 叙事卡片 */
+  #card { position: absolute; z-index: 25; left: 28px; bottom: 28px; width: 340px; max-width: calc(100vw - 56px);
+    background: #16181dF2; border: 1px solid #ffffff1a; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 16px 50px #000a; opacity: 0; transform: translateY(24px); transition: opacity .6s, transform .6s; pointer-events: none; }
+  #card.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  #card .photo { height: 180px; position: relative; display: flex; align-items: center; justify-content: center; color: #fff; }
+  #card .photo .cam { font-size: 40px; opacity: .9; }
+  #card .photo .wm { position: absolute; bottom: 8px; right: 12px; font-size: 11px; color: #ffffffcc; background: #00000044; padding: 2px 8px; border-radius: 999px; }
+  #card .photo .idx { position: absolute; top: 10px; left: 12px; font-size: 12px; color: #fff; background: #00000055; padding: 3px 10px; border-radius: 999px; }
+  #card .body { padding: 16px 18px 18px; }
+  #card .name { color: #fff; font-size: 19px; font-weight: 700; }
+  #card .time { color: #ffffff80; font-size: 12px; margin: 2px 0 12px; }
+  #card .story { color: #e8eaed; font-size: 14px; line-height: 1.75; min-height: 70px; }
+  #card .story.loading { color: #ffffff66; }
+  #card .close { position: absolute; top: 10px; right: 12px; color: #fff; background: #00000055; width: 26px; height: 26px;
+    border-radius: 50%; border: none; cursor: pointer; font-size: 15px; display: none; }
+  #card.manual .close { display: block; }
+
+  /* 覆盖层（封面 / 结尾） */
+  .overlay { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff; padding: 32px; background: radial-gradient(120% 120% at 50% 30%, #1a2330ee, #0d1117f8); transition: opacity .8s; }
+  .overlay.hide { opacity: 0; pointer-events: none; }
+  .overlay .kicker { font-size: 13px; letter-spacing: 3px; color: #ffd06b; margin-bottom: 18px; }
+  .overlay h1 { font-size: 40px; font-weight: 800; letter-spacing: 1px; margin-bottom: 18px; text-shadow: 0 2px 16px #000; }
+  .overlay p { font-size: 16px; color: #c9ced6; line-height: 1.9; max-width: 560px; margin-bottom: 32px; }
+  .overlay .meta { font-size: 13px; color: #ffffff66; margin-bottom: 28px; }
+  .btn { background: linear-gradient(90deg,#ff9d4d,#ffd06b); color: #2a1500; border: none; font-size: 16px; font-weight: 700;
+    padding: 13px 38px; border-radius: 999px; cursor: pointer; box-shadow: 0 8px 28px #ff9d4d55; transition: transform .15s; }
+  .btn:hover { transform: scale(1.04); }
+  .btn.ghost { background: #ffffff14; color: #fff; box-shadow: none; margin-top: 14px; font-weight: 500; font-size: 14px; padding: 9px 24px; }
+  .badge { position: absolute; top: 18px; right: 20px; z-index: 41; font-size: 12px; color: #ffffff99; background: #ffffff10; padding: 5px 12px; border-radius: 999px; }
+</style>
+<script>window._AMapSecurityConfig = { securityJsCode: '{{AMAP_SECURITY}}' };</script>
+<script src="https://webapi.amap.com/maps?v=2.0&key={{AMAP_JS_KEY}}"></script>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="badge">Demo · seed2.0 mini 实时生成文案</div>
+
+  <div id="topbar">
+    <span class="ttl" id="barTitle">川西环线</span>
+    <div id="progress"><i></i></div>
+    <span id="counter"></span>
+  </div>
+
+  <div id="card">
+    <button class="close" onclick="closeManual()">✕</button>
+    <div class="photo"><span class="cam">📷</span><span class="wm">这里放你的照片</span><span class="idx"></span></div>
+    <div class="body">
+      <div class="name"></div>
+      <div class="time"></div>
+      <div class="story"></div>
+    </div>
+  </div>
+
+  <!-- 封面 -->
+  <div class="overlay" id="cover">
+    <div class="kicker">A TRAVEL STORY</div>
+    <h1 id="coverTitle">这一路</h1>
+    <p id="coverIntro">正在用 AI 把你这趟旅程的碎片，写成一个故事…</p>
+    <div class="meta" id="coverMeta"></div>
+    <button class="btn" id="startBtn" onclick="play()">▶ 开始这段回忆</button>
+  </div>
+
+  <!-- 结尾 -->
+  <div class="overlay hide" id="ending">
+    <div class="kicker">THE END</div>
+    <h1 id="endTitle">这一路</h1>
+    <p id="endMeta"></p>
+    <button class="btn" onclick="replay()">↻ 再看一遍</button>
+    <button class="btn ghost" onclick="regenerate()">✨ 让 AI 换一种讲法</button>
+  </div>
+
+<script>
+// ===== 示例数据（坐标为高德 GCJ-02；note 是模拟的流水账，喂给 AI 润色）=====
+const CH = [
+  { name:"成都",   time:"Day 1 · 清晨", lng:104.0667, lat:30.6595, grad:["#3a4a6b","#1c2536"], note:"早上七点出发，吃了碗担担面，城市还没醒，导航定了亚丁" },
+  { name:"泸定",   time:"Day 1 · 午后", lng:102.2343, lat:29.9148, grad:["#6b4a3a","#2a1c14"], note:"过大渡河，铁索桥在晃，风很大，想起课本里的飞夺泸定桥" },
+  { name:"康定",   time:"Day 2 · 上午", lng:101.9576, lat:30.0556, grad:["#4a6b5a","#16261f"], note:"海拔一下上来了，太阳穴突突跳，喝了碗酥油茶才缓过来" },
+  { name:"新都桥", time:"Day 2 · 黄昏", lng:101.4970, lat:30.0610, grad:["#b8862f","#5a3f12"], note:"下午光线绝了，金色草原配白墙藏房，停车拍了一个多小时" },
+  { name:"理塘",   time:"Day 3 · 正午", lng:100.2682, lat:29.9959, grad:["#5a6b8a","#1f2636"], note:"海拔4014，世界高城，云压得很低，遇到一群放牧的人" },
+  { name:"稻城",   time:"Day 4 · 夜",   lng:100.2983, lat:29.0378, grad:["#2a3a5a","#0d1424"], note:"白塔在夕阳里发光，住了一晚，星空多到不真实" },
+  { name:"亚丁",   time:"Day 5 · 午后", lng:100.3326, lat:28.4350, grad:["#5a7a8a","#16262e"], note:"徒步五小时到牛奶海，腿都废了，但雪山倒影在湖里那一刻，全值了" },
+];
+
+let map, donePolyline, baseline, markers = [], pulse;
+let stories = CH.map(c => c.note);  // 默认用流水账，AI 生成后替换
+let title = "这一路", intro = "", playing = false;
+
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function gradCss(c){ return `linear-gradient(135deg, ${c.grad[0]}, ${c.grad[1]})`; }
+
+// ===== 初始化地图 =====
+function initMap(){
+  map = new AMap.Map("map", {
+    zoom: 6, center: [102.5, 29.8], viewMode: "2D",
+    mapStyle: "amap://styles/dark", pitch: 0,
+  });
+  const path = CH.map(c => [c.lng, c.lat]);
+  baseline = new AMap.Polyline({ path, strokeColor:"#ffffff", strokeOpacity:.25, strokeWeight:3, strokeStyle:"dashed", lineJoin:"round" });
+  donePolyline = new AMap.Polyline({ path:[], strokeColor:"#ff9d4d", strokeWeight:5, strokeOpacity:.95, lineJoin:"round", showDir:true });
+  map.add([baseline, donePolyline]);
+
+  CH.forEach((c, i) => {
+    const dot = document.createElement("div");
+    dot.style.cssText = `width:26px;height:26px;border-radius:50%;background:${gradCss(c)};border:2px solid #fff;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px #000a;cursor:pointer;`;
+    dot.textContent = i + 1;
+    const m = new AMap.Marker({ position:[c.lng,c.lat], content:dot, anchor:"center", offset:new AMap.Pixel(0,0) });
+    m.on("click", () => showManual(i));
+    markers.push(m);
+  });
+  map.add(markers);
+  map.setFitView(markers, false, [80, 80, 80, 80]);
+}
+
+// ===== 叙事卡片 =====
+function fillCard(i, manual){
+  const c = CH[i], card = $("#card");
+  card.querySelector(".photo").style.background = gradCss(c);
+  card.querySelector(".idx").textContent = `第 ${i+1} 站 / 共 ${CH.length} 站`;
+  card.querySelector(".name").textContent = c.name;
+  card.querySelector(".time").textContent = c.time;
+  const story = card.querySelector(".story");
+  story.textContent = stories[i] || c.note;
+  story.classList.toggle("loading", !aiReady);
+  card.classList.toggle("manual", !!manual);
+  card.classList.add("show");
+}
+function hideCard(){ $("#card").classList.remove("show"); }
+function closeManual(){ hideCard(); }
+
+function showManual(i){
+  playing = false;  // 点击下钻 = 暂停自动播放
+  $("#cover").classList.add("hide");
+  $("#ending").classList.add("hide");
+  flyTo(i, true);
+  fillCard(i, true);
+  setProgress(i);
+}
+
+// ===== 镜头 & 轨迹 =====
+function flyTo(i, quick){
+  const c = CH[i];
+  map.setZoomAndCenter(10, [c.lng, c.lat], false, quick ? 600 : 1400);
+  donePolyline.setPath(CH.slice(0, i+1).map(x => [x.lng, x.lat]));
+  if (pulse) map.remove(pulse);
+  const ring = document.createElement("div");
+  ring.style.cssText = "width:44px;height:44px;border-radius:50%;border:3px solid #ffd06b;animation:pl 1.4s infinite;";
+  pulse = new AMap.Marker({ position:[c.lng,c.lat], content:ring, anchor:"center" });
+  map.add(pulse);
+}
+function setProgress(i){
+  $("#progress > i").style.width = ((i+1)/CH.length*100) + "%";
+  $("#counter").textContent = `${i+1} / ${CH.length}`;
+  $("#barTitle").textContent = title;
+}
+
+// ===== 自动播放（电影感）=====
+async function play(){
+  $("#cover").classList.add("hide");
+  $("#ending").classList.add("hide");
+  playing = true;
+  for (let i = 0; i < CH.length; i++){
+    if (!playing) return;
+    flyTo(i, false);
+    setProgress(i);
+    await sleep(1500);
+    if (!playing) return;
+    fillCard(i, false);
+    await sleep(4800);
+    if (!playing) return;
+    hideCard();
+    await sleep(500);
+  }
+  // 结尾
+  map.setFitView(markers, false, [80,80,80,80], 1400);
+  await sleep(800);
+  $("#endTitle").textContent = title;
+  $("#endMeta").textContent = `${CH.length} 个地方，一段路。${intro || ""}`;
+  $("#ending").classList.remove("hide");
+  playing = false;
+}
+function replay(){ $("#progress > i").style.width = "0"; play(); }
+
+// ===== AI 生成文案 =====
+let aiReady = false;
+async function generate(){
+  try {
+    const res = await fetch("/api/generate_story", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ chapters: CH.map(c => ({name:c.name, time:c.time, note:c.note})) }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "生成失败");
+    title = data.title || title;
+    intro = data.intro || "";
+    if (Array.isArray(data.chapters)){
+      data.chapters.forEach((ch, i) => { if (ch && ch.story) stories[i] = ch.story; });
+    }
+    aiReady = true;
+    $("#coverTitle").textContent = title;
+    $("#coverIntro").textContent = intro || "一段被 AI 重新讲述的旅程。";
+    $("#coverMeta").textContent = "✨ 文案由 seed2.0 mini 生成";
+    $("#barTitle").textContent = title;
+  } catch (e) {
+    $("#coverIntro").textContent = "（AI 文案生成失败，已用原始记录代替。点开始仍可体验。）" ;
+    $("#coverMeta").textContent = "⚠️ " + e.message;
+    console.error(e);
+  }
+}
+async function regenerate(){
+  $("#ending").classList.add("hide");
+  $("#cover").classList.remove("hide");
+  $("#coverIntro").textContent = "正在让 AI 换一种讲法…";
+  $("#coverMeta").textContent = "";
+  aiReady = false;
+  await generate();
+}
+
+// ===== 启动 =====
+window.onload = () => {
+  const meta = $("#coverMeta");
+  $("#coverMeta").textContent = "成都 → 康定 → 新都桥 → 理塘 → 稻城亚丁";
+  initMap();
+  generate();
+};
+
+// 脉冲动画
+const st = document.createElement("style");
+st.textContent = "@keyframes pl{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.5);opacity:0}}";
+document.head.appendChild(st);
+</script>
+</body>
+</html>

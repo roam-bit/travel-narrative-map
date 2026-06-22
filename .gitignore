@@ -1,0 +1,47 @@
+# ============================================================
+#  旅行叙事地图 · 开源版 .gitignore
+#  原则：密钥、个人隐私、真实旅程数据一律不上传（本地保留，不进 GitHub）
+# ============================================================
+
+# ---------- 密钥（绝对不能上传）----------
+.env
+.env.*
+!.env.example
+
+# ---------- 个人隐私 / 内部工作文档（绝对不能上传）----------
+故事素材-当事人口述.md
+进度交接-给下一个session.md
+CODEX任务-生成3D载具模型.md
+
+# ---------- 真实旅程数据：照片 + 精确 GPS 轨迹 + EXIF ----------
+# 这些是当事人的真实数据，含精确坐标，纯代码框架不上传；
+# 别人 clone 后按 README 放自己的数据即可。
+photos_web/
+bgm/
+all_exif.json
+photos_assign.json
+photos_by_chapter.json
+chapters_built.json
+chapters_def.json
+vision_labels.json
+junk_list.json
+track_overview.json
+web_photos.json
+web_photos.backup-*.json
+story.json
+
+# ---------- 本地工具 / 编辑器配置 ----------
+.claude/
+.vscode/
+.idea/
+
+# ---------- 系统 / 缓存垃圾 ----------
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+
+# ---------- 历史备份 ----------
+*.bak
+*.bak-*
+story.html.bak-*

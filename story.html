@@ -1,0 +1,1945 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>把整个中国，画成一条线 · 环中国摩旅</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏍️</text></svg>">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #07090d; overflow: hidden;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #fff; }
+  #map { position: absolute; inset: 0; }
+  .panel { position: absolute; z-index: 10; transition: opacity .6s; }
+  .hide { opacity: 0; pointer-events: none; }
+  #loading { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: #07090d; }
+
+  /* ===== 播放控制条（载具弹窗已废除：2026-06-10 零门槛开场，换载具用控制条按钮） ===== */
+  #travelControls { top: 16px; right: 18px; z-index: 25; display: flex; gap: 8px; align-items: center;
+    background: #07090dc7; border: 1px solid #ffffff16; border-radius: 999px; padding: 7px; backdrop-filter: blur(12px); }
+  #travelControls button { border: 1px solid #ffffff16; background: #ffffff10; color: #fff; border-radius: 999px; padding: 7px 11px;
+    min-height: 34px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+  #travelControls button:hover { background: #ffffff22; }
+  #travelControls .mode { color: #ffd06b; border-color: #ff9d4d55; }
+
+  /* ===== 本地 3D 载具 marker，占位后可替换为 glTF ===== */
+  .rider-marker { width: 56px; height: 56px; position: relative; pointer-events: none; transform: scale(1.25); transform-origin: 50% 50%; }
+  .rider-heading { position: absolute; inset: 0; transform-origin: 50% 50%; transition: transform .08s linear; }
+  .rider-shadow { position: absolute; left: 50%; top: 50%; width: 26px; height: 10px; border-radius: 50%;
+    background: #0009; filter: blur(4px); transform: translate(-50%, 6px); }
+  .nav-arrow { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: translate(-50%, -82%);
+    border-left: 12px solid transparent; border-right: 12px solid transparent; border-bottom: 24px solid #ff9d2e;
+    filter: drop-shadow(0 0 7px #ff9d4dcc); }
+  .nav-core { position: absolute; left: 50%; top: 50%; width: 13px; height: 13px; border-radius: 50%; transform: translate(-50%, -50%);
+    background: radial-gradient(circle at 40% 35%, #fff, #ffd06b); border: 2px solid #fff; box-shadow: 0 0 12px #ffd06b, 0 0 3px #fff; }
+  .rider-body { position: absolute; left: 13px; top: 5px; width: 42px; height: 52px; transform: rotateX(58deg);
+    transform-style: preserve-3d; filter: drop-shadow(0 8px 12px #000a); }
+  .vehicle-core { position: absolute; left: 12px; top: 14px; width: 18px; height: 30px; border-radius: 11px 11px 6px 6px;
+    background: linear-gradient(180deg, #ffd06b, #ff7a18); box-shadow: inset 0 0 0 2px #ffffff30, 0 0 18px #ff9d4d99; }
+  .vehicle-core::before { content: ""; position: absolute; left: 4px; top: -13px; width: 10px; height: 18px;
+    border-radius: 10px 10px 2px 2px; background: #ffefe0; box-shadow: 0 -5px 12px #ffd06b77; }
+  .wheel { position: absolute; left: 8px; width: 26px; height: 7px; border-radius: 999px; background: #1a1d24; border: 1px solid #ffffff66; }
+  .wheel.front { top: 5px; } .wheel.back { bottom: 4px; }
+  .rider-head { position: absolute; left: 16px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: #fff1cf;
+    transform: translateZ(16px); box-shadow: 0 0 10px #ffd06b88; }
+  .mode-walk .wheel, .mode-walk .vehicle-core { display: none; }
+  .mode-walk .rider-body::before { content: ""; position: absolute; left: 18px; top: 15px; width: 7px; height: 24px; border-radius: 999px;
+    background: linear-gradient(#ffd06b,#ff9d4d); box-shadow: -8px 16px 0 -3px #c9ced6, 8px 16px 0 -3px #c9ced6; }
+  .mode-bike .vehicle-core, .mode-ebike .vehicle-core { width: 16px; left: 13px; background: linear-gradient(180deg,#9fd9ff,#33a1ff); }
+  .mode-ebike .vehicle-core { background: linear-gradient(180deg,#d7ff76,#55ce74); }
+  .mode-car .rider-head { display: none; }
+  .mode-car .vehicle-core { left: 7px; top: 11px; width: 28px; height: 34px; border-radius: 9px 9px 6px 6px;
+    background: linear-gradient(180deg,#f5f8ff,#6f8ebf); }
+  .mode-car .vehicle-core::before { left: 7px; top: -8px; width: 14px; height: 12px; background: #b9d4ff; }
+  .mode-car .wheel { left: 5px; width: 32px; }
+
+  /* ===== 概览面板 ===== */
+  #overview { top: 0; left: 0; bottom: 0; width: 380px; max-width: 86vw; padding: 32px 26px 20px;
+    background: linear-gradient(100deg, #07090df2 60%, #07090d88 90%, transparent); overflow-y: auto; }
+  #overview .kicker { font-size: 12px; letter-spacing: 4px; color: #ffd06b; }
+  #overview h1 { font-size: 30px; font-weight: 800; line-height: 1.25; margin: 8px 0 14px; text-shadow: 0 2px 12px #000; }
+  #overview .intro { font-size: 14px; color: #c9ced6; line-height: 1.8; margin-bottom: 18px; }
+  .bignums { display: flex; gap: 18px; margin-bottom: 8px; }
+  .bignums .n b { font-size: 22px; color: #ff9d4d; } .bignums .n span { font-size: 11px; color: #ffffff99; display: block; }
+  .ends { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 20px; }
+  .ends .e { font-size: 11px; background: #ffffff12; border: 1px solid #ffffff22; border-radius: 999px; padding: 3px 9px; color: #ffd06b; }
+  .play-all { width: 100%; background: linear-gradient(90deg,#ff9d4d,#ffd06b); color: #2a1500; border: none;
+    font-size: 15px; font-weight: 700; padding: 12px; border-radius: 999px; cursor: pointer; margin-bottom: 18px; }
+  .chlist { display: flex; flex-direction: column; gap: 8px; }
+  .chcard { background: #ffffff0d; border: 1px solid #ffffff14; border-radius: 12px; padding: 11px 13px; cursor: pointer; transition: .15s; }
+  .chcard:hover { background: #ffffff1a; transform: translateX(3px); }
+  .chcard .cn { font-size: 14px; font-weight: 600; }
+  .chcard .cm { font-size: 11px; color: #ffffff99; margin-top: 3px; }
+  .chcard .cb { font-size: 11px; color: #ff9d4d; margin-top: 4px; }
+
+  /* ===== 章节面板 ===== */
+  #chapter { inset: 0; pointer-events: none; }
+  #chTop { position: absolute; top: 0; left: 0; right: 0; padding: 18px 22px; pointer-events: auto;
+    background: linear-gradient(#07090dcc, transparent); display: flex; align-items: center; gap: 14px; }
+  #chTop .cidx { font-size: 12px; color: #ffd06b; letter-spacing: 2px; }
+  #chTop .cname { font-size: 20px; font-weight: 800; text-shadow: 0 2px 8px #000; }
+  #chTop .sp { flex: 1; }
+  #chTop button { background: #ffffff18; color: #fff; border: none; border-radius: 999px; padding: 7px 15px; font-size: 13px; cursor: pointer; margin-left: 8px; }
+  #chTop button:hover { background: #ffffff2e; }
+  #chCard { position: absolute; left: 28px; bottom: 28px; width: 380px; max-width: calc(100vw - 56px); pointer-events: auto;
+    max-height: calc(100vh - 130px); overflow-y: auto;
+    background: #14171dF2; border: 1px solid #ffffff1a; border-radius: 18px; padding: 20px; box-shadow: 0 16px 50px #000a; }
+  .pcount { font-size: 12px; color: #ffd06b; margin-bottom: 8px; }
+  .pstrip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; }
+  .pstrip img { height: 92px; border-radius: 8px; cursor: pointer; flex: 0 0 auto; object-fit: cover; border: 1px solid #ffffff1a; }
+  #lb { position: absolute; inset: 0; z-index: 90; background: #000e; display: none; align-items: center; justify-content: center; cursor: zoom-out; }
+  #lb.show { display: flex; }
+  #lb img { max-width: 92%; max-height: 92%; border-radius: 10px; box-shadow: 0 10px 60px #000; }
+  #lb #lbMeta { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; color: #ffffffcc;
+    font-size: 13px; letter-spacing: 1px; pointer-events: none; text-shadow: 0 1px 6px #000; }
+  #chCard .ph { height: 120px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 6px; color: #fff; margin-bottom: 14px; }
+  #chCard .ph .cam { font-size: 32px; opacity: .9; } #chCard .ph .t { font-size: 12px; color: #ffffffcc; }
+  #chCard .story { font-size: 15px; line-height: 1.85; color: #eef0f3; margin-bottom: 14px; }
+  #chCard .meta { display: flex; gap: 16px; border-top: 1px solid #ffffff14; padding-top: 12px; }
+  #chCard .meta .m b { font-size: 17px; color: #ff9d4d; } #chCard .meta .m span { font-size: 11px; color: #ffffff88; display: block; }
+
+  /* 里程碑浮现 */
+  #milestone { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+    pointer-events: none; opacity: 0; transition: opacity .8s; }
+  #milestone.show { opacity: 1; }
+  #milestone .box { text-align: center; transform: scale(.8); transition: transform .8s; }
+  #milestone.show .box { transform: scale(1); }
+  #milestone .lab { font-size: 30px; font-weight: 800; color: #ffd06b; text-shadow: 0 0 24px #ff9d4daa, 0 2px 10px #000; letter-spacing: 2px; }
+
+  /* 沿途地名弹出小牌：骑手经过代表点时在地图上弹出、停留、淡出（forwards 定格在透明，章节切换时统一清理） */
+  .place-pop { animation: placePop 3.4s ease forwards; pointer-events: none; }
+  .place-pop .pp-pill { padding: 4px 12px; border-radius: 999px; background: #0b0e14e6; border: 1px solid #ff9d4d88;
+    color: #ffd06b; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 4px 16px #000c; }
+  .place-pop .pp-tail { width: 2px; height: 10px; margin: 0 auto; background: linear-gradient(#ff9d4d, transparent); }
+  @keyframes placePop {
+    0%   { opacity: 0; transform: translateY(10px) scale(.6); }
+    10%  { opacity: 1; transform: translateY(0) scale(1.06); }
+    16%  { transform: translateY(0) scale(1); }
+    78%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-12px) scale(.95); }
+  }
+  /* ===== M10 BGM 面板 ===== */
+  #bgmPanel { position: absolute; top: 64px; right: 18px; z-index: 26; width: 264px;
+    background: #0b0e14e0; border: 1px solid #ffffff16; border-radius: 14px; padding: 12px;
+    backdrop-filter: blur(12px); display: none; }
+  #bgmPanel.show { display: block; }
+  #bgmPanel .bp-title { font-size: 12px; letter-spacing: 3px; color: #ffd06b; margin-bottom: 8px; }
+  #bgmList { max-height: 180px; overflow: auto; margin-bottom: 10px; }
+  #bgmList .bgm-item { padding: 7px 9px; border-radius: 8px; font-size: 13px; color: #dfe3ea;
+    cursor: pointer; display: flex; gap: 7px; align-items: center; }
+  #bgmList .bgm-item:hover { background: #ffffff12; }
+  #bgmList .bgm-item.active { background: #ff9d4d22; color: #ffd06b; }
+  #bgmList .bgm-item .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #bgmList .bgm-empty { font-size: 12px; color: #9aa3b2; line-height: 1.7; padding: 4px 2px; }
+  #bgmPanel .bp-row { display: flex; gap: 8px; align-items: center; }
+  #bgmPanel .bp-row button { flex: none; border: 1px solid #ffffff16; background: #ffffff10; color: #fff;
+    border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  #bgmPanel .bp-row button:hover { background: #ffffff22; }
+  #bgmPanel input[type=range] { flex: 1; accent-color: #ff9d4d; }
+  #bgmPanel .bp-tip { font-size: 11px; color: #7e8696; margin-top: 8px; line-height: 1.6; }
+
+  /* ===== M4 电影级收尾：流光头 + 照片聚合卡片（Apple 照片地图风）+ 定格字幕 ===== */
+  .flow-head { width: 14px; height: 14px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle at 38% 32%, #fff, #ffd06b 65%, transparent 100%);
+    box-shadow: 0 0 18px 6px #ffd06baa, 0 0 4px #fff; }
+  .photo-card { pointer-events: auto; cursor: pointer; filter: drop-shadow(0 10px 24px #000a);
+    animation: photoPop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+  .photo-card .pc-frame { position: relative; width: 64px; height: 64px; border-radius: 14px; background: #fff; padding: 3px;
+    transition: transform .15s; }
+  .photo-card:hover .pc-frame { transform: scale(1.1); }
+  .photo-card .pc-frame img { width: 58px; height: 58px; border-radius: 11px; object-fit: cover; display: block; background: #2a3550; }
+  .photo-card .pc-count { position: absolute; left: 8px; bottom: 7px; color: #fff; font-size: 12px; font-weight: 800;
+    text-shadow: 0 1px 4px #000c, 0 0 2px #0008; }
+  .photo-card .pc-tail { width: 0; height: 0; margin: -1px auto 0; border-left: 7px solid transparent;
+    border-right: 7px solid transparent; border-top: 9px solid #fff; }
+  @keyframes photoPop {
+    0%   { opacity: 0; transform: scale(.2) translateY(10px); }
+    60%  { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  #finaleCaption { position: absolute; left: 0; right: 0; bottom: 36px; z-index: 35; text-align: center; pointer-events: none;
+    opacity: 0; transform: translateY(14px); transition: opacity 1.1s ease, transform 1.1s ease; }
+  #finaleCaption.show { opacity: 1; transform: none; }
+  #finaleCaption .fc-kicker { font-size: 12px; letter-spacing: 4px; color: #ffffffa8; margin-bottom: 8px; }
+  #finaleCaption .fc-main { font-size: 24px; font-weight: 800; color: #ffd06b; letter-spacing: 2px;
+    text-shadow: 0 0 26px #ff9d4d88, 0 2px 12px #000; }
+  #finaleBtns { position: absolute; right: 18px; bottom: 18px; z-index: 36; display: flex; gap: 8px;
+    opacity: 0; pointer-events: none; transition: opacity .8s; }
+  #finaleBtns.show { opacity: 1; pointer-events: auto; }
+  #finaleBtns button { border: 1px solid #ffffff2a; background: #0b0e14cc; color: #fff; border-radius: 999px;
+    padding: 8px 16px; font-size: 13px; cursor: pointer; backdrop-filter: blur(8px); }
+  #finaleBtns button:hover { background: #ffffff22; }
+  @keyframes badgePulse { 0% { transform: scale(1); } 40% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+  @media (max-width: 720px) {
+    #travelControls { left: 12px; right: 12px; top: auto; bottom: 12px; justify-content: center; border-radius: 18px; }
+    #travelControls button { flex: 1; padding: 7px 8px; }
+    #finaleCaption { bottom: 88px; }
+    #finaleCaption .fc-main { font-size: 17px; letter-spacing: 1px; }
+    #finaleBtns { right: 12px; bottom: 60px; }
+  }
+</style>
+<script>window._AMapSecurityConfig = { securityJsCode: '{{AMAP_SECURITY}}' };</script>
+<script src="https://webapi.amap.com/maps?v=2.0&key={{AMAP_JS_KEY}}"></script>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="loading">正在加载这一整年的路…</div>
+
+  <div id="travelControls" class="panel hide">
+    <button class="mode" id="travelModeBtn" onclick="cycleTravelMode()">🏍️ 摩托车 · 4x</button>
+    <button id="speedBtn" onclick="cyclePlaybackRate()">速度 2x</button>
+    <button id="smoothBtn" onclick="cycleSmoothLevel()">丝滑 中</button>
+    <button id="cameraModeBtn" onclick="toggleCameraMode()">俯视跟随</button>
+    <button id="distBadgeBtn" onclick="toggleDistBadge()">距离牌 开</button>
+    <button id="bgmBtn" onclick="toggleBgmPanel()">🎵 BGM</button>
+    <button onclick="pauseTravelAnimation()">暂停</button>
+  </div>
+
+  <div id="overview" class="panel hide">
+    <div class="kicker">A YEAR ON THE ROAD</div>
+    <h1 id="ovTitle">把整个中国，画成一条线</h1>
+    <div class="intro" id="ovIntro"></div>
+    <div class="bignums">
+      <div class="n"><b id="ovKm">3.5万</b><span>公里</span></div>
+      <div class="n"><b>222</b><span>天在路上</span></div>
+      <div class="n"><b>≈1.4</b><span>圈赤道</span></div>
+    </div>
+    <div class="ends">
+      <span class="e">最南 18.22°N</span><span class="e">最高 5390.6m</span>
+      <span class="e">最西 73.98°E</span><span class="e">最北 53.56°N</span><span class="e">最东 134.72°E</span>
+    </div>
+    <button class="play-all" onclick="playAll()">▶ 播放全程（约 1 分钟）</button>
+    <div class="chlist" id="chlist"></div>
+  </div>
+
+  <div id="chapter" class="panel hide">
+    <div id="chTop">
+      <span class="cidx" id="chIdx"></span><span class="cname" id="chName"></span>
+      <span class="sp"></span>
+      <button onclick="prevCh()">←</button><button onclick="nextCh()">下一章 →</button>
+      <button onclick="showOverview()">概览</button>
+    </div>
+    <div id="chCard">
+      <div class="ph" id="chPh"><span class="cam">📷</span><span class="t">这里将展示你在此地的照片</span></div>
+      <div class="story" id="chStory"></div>
+      <div class="meta" id="chMeta"></div>
+    </div>
+  </div>
+
+  <div id="milestone"><div class="box"><div class="lab" id="msLab"></div></div></div>
+  <div id="finaleCaption"><div class="fc-main"></div></div>
+  <div id="finaleBtns">
+    <button id="finaleSkipBtn" onclick="skipFinale()">⏭ 跳过</button>
+    <button id="finaleReplayBtn" onclick="replayAll()" style="display:none">▶ 再看一遍</button>
+    <button id="finaleExitBtn" onclick="exitFinale()" style="display:none">↺ 返回总览</button>
+  </div>
+  <div id="lb" onclick="this.classList.remove('show')"><img alt=""><div id="lbMeta"></div></div>
+
+  <div id="bgmPanel">
+    <div class="bp-title">背景音乐</div>
+    <div id="bgmList"></div>
+    <div class="bp-row">
+      <button id="bgmPlayBtn" onclick="bgmTogglePlay()">▶</button>
+      <input type="range" id="bgmVol" min="0" max="100" value="70" oninput="setBgmVolume(this.value)">
+      <button onclick="addLocalBgm()">＋ 添加</button>
+    </div>
+    <div class="bp-tip">把 mp3/m4a/wav 放进项目 <b>bgm/</b> 文件夹，刷新页面即出现在列表（永久）；「＋ 添加」临时加载本机音乐（刷新后失效）。</div>
+    <input type="file" id="bgmFile" accept="audio/*" multiple style="display:none">
+  </div>
+  <audio id="bgmAudio" preload="auto"></audio>
+
+<script>
+let map, CH = [], STORY = {}, realChapters = [], chLines = [], chMarkers = [], curIdx = -1, playing = false;
+let activeSmoothLines = [];   // 当前章按平滑度重画的轨迹线
+let TOTAL_KM = 0;             // 全程总里程（boot 时累加，收尾字幕/距离牌用）
+let finaleToken = 0, finaleOn = false, finaleRaf = 0, finaleObjs = [], finaleMarkers = [], finalePathCache = null;
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const TRAVEL_MODES = [
+  { id:"walk", label:"步行", icon:"🚶", speed:1, modelUrl:"/models/walker.gltf", modelScale:1.9 },
+  { id:"bike", label:"自行车", icon:"🚴", speed:2, modelUrl:"/models/bike-rider.gltf", modelScale:2.25 },
+  { id:"ebike", label:"电动车", icon:"🛵", speed:3, modelUrl:"/models/ebike-rider.gltf", modelScale:2.45 },
+  { id:"moto", label:"摩托车", icon:"🏍️", speed:4, modelUrl:"/models/akira/scene.gltf", modelScale:1.1, headingOffset:0 },
+  { id:"car", label:"汽车", icon:"🚗", speed:5, modelUrl:"/models/car.gltf", modelScale:2.15 },
+];
+const PLAYBACK_MS_PER_KM_AT_1X = 7000;
+const MODEL_HEADING_OFFSET = 0;
+const GLTF_HEADING_OFFSET = 0;
+const GLTF_HEIGHT = 35;
+let selectedTravel = "moto", travelReady = false, cameraMode = "follow", entryShown = false;
+let distBadgeVisible = true;
+let playbackRate = 2;   // 倍速：默认 2x（2026-06-10 用户验收拍板），「速度」按钮实时调，作用于整体播放节奏
+let riderMarker = null, riderRoot = null, riderHeading = null, travelAnim = null;
+let lastRiderPoint = null, lastRiderHeading = 0;
+let THREE = null, GLTFLoaderClass = null, threeLayer = null, threeRenderer = null, threeScene = null, threeCamera = null;
+let threeLoader = null, threeCustomCoords = null, threeReady = false, threeInitPromise = null, activeThreeModel = null;
+const threeModels = {};
+let chapterAutoToken = 0;
+let modelRendererStarted = false, mapComplete = false;
+let threeWarmupRaf = null;
+let threeClock = null, activeThreeMixer = null, animDriverRaf = null;
+const threeMixers = {};
+
+function currentMode(){
+  return TRAVEL_MODES.find(m => m.id === selectedTravel) || TRAVEL_MODES[3];
+}
+
+function updateTravelUi(){
+  const mode = currentMode();
+  $("#travelModeBtn").textContent = `${mode.icon} ${mode.label} · ${mode.speed}x`;
+  $("#cameraModeBtn").textContent = cameraMode === "follow" ? "俯视跟随" : "固定全章";
+  if (riderRoot) riderRoot.className = `rider-marker mode-${mode.id}`;
+}
+
+// 零门槛开场：默认摩托、地图就绪即自动播放全程（顶部控制条仍可随时换载具/调速）
+async function autoStart(){
+  selectedTravel = "moto";
+  travelReady = true;
+  updateTravelUi();
+  $("#travelControls").classList.remove("hide");
+  switchGltfModel(getFirstRoutePoint(), 0);
+  // 投影未就绪（complete 前）创建骑手 Marker 会抛 Pixel(NaN)：等就绪再开播（同收尾的防御，最多 6s）
+  for (let w = 0; w < 40 && !projectionReady(); w++){ if (map.render) map.render(); await sleep(150); }
+  playAll();
+}
+
+function cycleTravelMode(){
+  const idx = TRAVEL_MODES.findIndex(m => m.id === selectedTravel);
+  const next = TRAVEL_MODES[(idx + 1) % TRAVEL_MODES.length];
+  selectedTravel = next.id;
+  updateTravelUi();
+  switchGltfModel(lastRiderPoint || getFirstRoutePoint(), lastRiderHeading);
+  if (curIdx >= 0) {
+    const wasMoving = !!travelAnim;
+    stopTravelAnimation(false, "restart");
+    if (wasMoving && !playing) playChapterMotion(curIdx);   // 连播中由 playAll 收到"restart"自己重播本章（双驱动会互相掐）
+  }
+}
+
+function cyclePlaybackRate(){
+  const rates = [1, 2, 4, 8];
+  playbackRate = rates[(rates.indexOf(playbackRate) + 1) % rates.length];
+  const btn = $("#speedBtn");
+  if (btn) btn.textContent = `速度 ${playbackRate}x`;
+}
+
+function cycleSmoothLevel(){
+  smoothLevel = (smoothLevel + 1) % SMOOTH_LEVELS.length;
+  const b = $("#smoothBtn");
+  if (b) b.textContent = `丝滑 ${SMOOTH_LEVELS[smoothLevel].name}`;
+  for (const k in motionPathCache) delete motionPathCache[k];   // 清缓存，按新平滑度重建路径
+  finalePathCache = null;                                       // 收尾流光路径同样按新平滑度重建
+  journeyPathCache = null;                                      // 全程一镜路径同样重建
+  if (curIdx >= 0) {
+    const wasMoving = !!travelAnim;
+    stopTravelAnimation(false, "restart");
+    if (wasMoving) {
+      if (!playing && travelReady) playChapterMotion(curIdx);   // 单章重播；全程一镜由 playAll 收到"restart"从当前位置续播
+    } else {
+      drawActiveSmoothLine(curIdx);                             // 静态浏览才重画底线（播放=纯净模式不画）
+      const path = motionPathCache[curIdx] || (motionPathCache[curIdx] = buildMotionPath(CH[curIdx]));
+      const s = sampleMotionPath(path, 0);
+      if (s) setRiderAt(s.point, s.heading);
+    }
+  }
+}
+
+function toggleCameraMode(){
+  cameraMode = cameraMode === "follow" ? "fixed" : "follow";
+  updateTravelUi();
+  if (curIdx >= 0 && cameraMode === "fixed") {
+    setMapPitch(34);
+    map.setFitView(chLines[curIdx], false, [120, 120, 120, 430], 600);
+  }
+}
+
+function toggleDistBadge(){
+  distBadgeVisible = !distBadgeVisible;
+  const btn = document.getElementById("distBadgeBtn");
+  if (btn) btn.textContent = distBadgeVisible ? "距离牌 开" : "距离牌 关";
+  if (distBadgeEl) distBadgeEl.style.display = distBadgeVisible ? "" : "none";
+}
+
+// 距离牌 offset：跟 zoom 联动，让它紧贴模型头顶
+// 系数 22、min 20：再贴近一档（用户反馈 30 还是偏远）。distBadgeNudge 给手动微调留口子。
+let distBadgeNudge = 0;
+function distBadgeOffsetPx(){
+  if (!map || !map.getZoom) return 50;
+  const z = map.getZoom();
+  return -Math.max(20, Math.min(220, Math.round(Math.pow(1.55, z - 5.2) * 22))) + distBadgeNudge;
+}
+
+function makeRiderContent(){
+  const root = document.createElement("div");
+  root.className = "rider-marker";
+  // 3D 模型加载不出来时的干净降级：导航箭头 + 发光核心（随朝向旋转），不再是丑方块
+  root.innerHTML = `
+    <div class="rider-shadow"></div>
+    <div class="rider-heading"><div class="nav-arrow"></div></div>
+    <div class="nav-core"></div>`;
+  riderRoot = root;
+  riderHeading = root.querySelector(".rider-heading");
+  return root;
+}
+
+function ensureRiderMarker(position){
+  if (riderMarker) return riderMarker;
+  const start = position || getFirstRoutePoint() || [104, 35];
+  riderMarker = new AMap.Marker({ position:start, content:makeRiderContent(), anchor:"center", zIndex:120 });
+  map.add(riderMarker);
+  return riderMarker;
+}
+
+function getFirstRoutePoint(){
+  for (const {c} of realChapters) {
+    for (const seg of c.segments || []) {
+      const p = normalizePoint(seg[0]);
+      if (p) return p;
+    }
+  }
+  return null;
+}
+
+function setRiderAt(point, heading){
+  if (!point) return;
+  lastRiderPoint = point;
+  lastRiderHeading = heading;
+  ensureRiderMarker(point).setPosition(point);
+  if (riderHeading) riderHeading.style.transform = `rotate(${heading + MODEL_HEADING_OFFSET}deg)`;
+  updateGltfModel(point, heading);
+}
+
+function setFallbackVisible(visible){
+  if (riderRoot) riderRoot.style.display = visible ? "" : "none";
+  document.body.dataset.modelRenderer = visible ? "css-fallback" : "gltf";
+}
+
+function setGltfStatus(status){
+  document.body.dataset.gltfStatus = status;
+}
+
+function modelScaleForZoom(){
+  const zoom = map && map.getZoom ? map.getZoom() : 7;
+  const scale = 72000 / Math.pow(1.28, Math.max(0, zoom - 5.2));   // 放大：足以盖住当前轨迹点
+  const modeBoost = currentMode().modelScale || 1;
+  return Math.max(9000, Math.min(280000, scale * modeBoost));
+}
+
+// 骑手模型更新/切换：实际渲染走 Three.js GLCustomLayer（updateThreeModel/switchThreeModel）。
+// 旧版高德 GltfLoader 路径已删（2026-06-10 体检：AMap 2.0 下该插件从未加载成功，gltfReady 恒 false，整条全是死分支）。
+function updateGltfModel(point, heading){
+  if (!updateThreeModel(point, heading)) setFallbackVisible(true);
+}
+
+function switchGltfModel(point, heading){
+  if (threeReady || threeInitPromise) return switchThreeModel(point, heading);
+  setFallbackVisible(true);   // Three 还没开始初始化（boot 早期）：先显示箭头占位，startModelRenderer 就绪后会再切真模型
+  return Promise.resolve(false);
+}
+
+async function loadThreeRuntime(){
+  if (THREE && GLTFLoaderClass) return true;
+  const [threeModule, loaderModule] = await Promise.all([
+    import("/vendor/three/three.module.js"),
+    import("/vendor/three/GLTFLoader.js"),
+  ]);
+  THREE = threeModule;
+  GLTFLoaderClass = loaderModule.GLTFLoader;
+  return true;
+}
+
+function initThreeLayer(){
+  if (threeInitPromise) return threeInitPromise;
+  threeInitPromise = (async () => {
+    setGltfStatus("three-loading");
+    if (!window.AMap || !AMap.GLCustomLayer || !map.customCoords) {
+      setGltfStatus("three-unavailable");
+      setFallbackVisible(true);
+      return false;
+    }
+    try {
+      await loadThreeRuntime();
+      threeCustomCoords = map.customCoords;
+      if (threeCustomCoords.setCenter) threeCustomCoords.setCenter([104, 35]);
+      if (threeCustomCoords.lngLatsToCoords) threeCustomCoords.lngLatsToCoords([[104, 35]]);
+    } catch (err) {
+      console.warn("Three.js runtime failed, using CSS marker fallback.", err);
+      setGltfStatus("three-import-failed");
+      setFallbackVisible(true);
+      return false;
+    }
+
+    return new Promise(resolve => {
+      let settled = false;
+      const settle = value => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const timer = setTimeout(() => {
+        setGltfStatus("three-timeout");
+        setFallbackVisible(true);
+        settle(false);
+      }, 30000);
+
+      try {
+        threeLayer = new AMap.GLCustomLayer({
+          zIndex: 127,
+          init: gl => {
+            try {
+              threeRenderer = new THREE.WebGLRenderer({ context: gl, logarithmicDepthBuffer: true });
+              threeRenderer.autoClear = false;
+              if (THREE.SRGBColorSpace) threeRenderer.outputColorSpace = THREE.SRGBColorSpace;
+              threeScene = new THREE.Scene();
+              threeCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 100, 1 << 30);
+              threeScene.add(new THREE.HemisphereLight(0xfff2d8, 0x111827, 1.8));
+              const keyLight = new THREE.DirectionalLight(0xffd6a1, 2.2);
+              keyLight.position.set(1, 1, 2);
+              threeScene.add(keyLight);
+              const rimLight = new THREE.DirectionalLight(0x7fb2ff, 0.75);
+              rimLight.position.set(-1, -1, 1.5);
+              threeScene.add(rimLight);
+              threeLoader = new GLTFLoaderClass();
+              threeClock = new THREE.Clock();
+              threeReady = true;
+              clearTimeout(timer);
+              setGltfStatus("three-ready");
+              settle(true);
+            } catch (err) {
+              clearTimeout(timer);
+              console.warn("Three.js init failed, using CSS marker fallback.", err);
+              setGltfStatus(`three-init-failed:${err && err.message ? err.message.slice(0, 80) : "unknown"}`);
+              setFallbackVisible(true);
+              settle(false);
+            }
+          },
+          render: () => {
+            if (!threeRenderer || !threeCamera || !threeScene || !threeCustomCoords) return;
+            if (threeCustomCoords.setCenter) threeCustomCoords.setCenter([104, 35]);
+            const { near, far, fov, up, lookAt, position } = threeCustomCoords.getCameraParams();
+            threeCamera.near = near;
+            threeCamera.far = far;
+            threeCamera.fov = fov;
+            threeCamera.position.set(...position);
+            threeCamera.up.set(...up);
+            threeCamera.lookAt(...lookAt);
+            threeCamera.updateProjectionMatrix();
+            // 推进动画 mixer：每帧用 clock delta 推进骑行动画
+            if (activeThreeMixer && threeClock) activeThreeMixer.update(threeClock.getDelta());
+            threeRenderer.resetState();
+            // 清深度缓冲：高德地图先渲染会在共享深度缓冲里留值，不清的话模型实心大块(车身)会被错误深度剔除，只剩边缘(轮子/人)。这是 GLCustomLayer+Three 集成的经典坑。
+            threeRenderer.clearDepth();
+            threeRenderer.render(threeScene, threeCamera);
+            threeRenderer.resetState();   // 渲染后归还 GL 状态给高德，避免共享画布状态串台
+          },
+        });
+        if (map.add) map.add(threeLayer);
+        else if (map.addLayer) map.addLayer(threeLayer);
+        else if (threeLayer.setMap) threeLayer.setMap(map);
+        setGltfStatus("three-layer-added");
+        warmupThreeLayer();
+      } catch (err) {
+        clearTimeout(timer);
+        console.warn("Three.js custom layer failed, using CSS marker fallback.", err);
+        setGltfStatus("three-layer-failed");
+        setFallbackVisible(true);
+        settle(false);
+      }
+    });
+  })();
+  return threeInitPromise;
+}
+
+function warmupThreeLayer(){
+  if (threeWarmupRaf) cancelAnimationFrame(threeWarmupRaf);
+  let frames = 0;
+  const tick = () => {
+    if (map && map.render) map.render();
+    frames += 1;
+    if (!threeReady && frames < 1800) threeWarmupRaf = requestAnimationFrame(tick);  // 持续预热到图层就绪(~30s)，避免地图空闲时 init 不触发而超时
+  };
+  threeWarmupRaf = requestAnimationFrame(tick);
+}
+
+function getThreeCoords(point){
+  if (!threeCustomCoords || !point) return null;
+  if (threeCustomCoords.lngLatToCoord) return threeCustomCoords.lngLatToCoord(point);
+  if (threeCustomCoords.lngLatsToCoords) return threeCustomCoords.lngLatsToCoords([point])[0];
+  return null;
+}
+
+function updateThreeModel(point, heading){
+  if (!threeReady || !activeThreeModel || !point) return false;
+  const coord = getThreeCoords(point);
+  if (!coord) return false;
+  const scale = modelScaleForZoom();
+  activeThreeModel.position.set(coord[0], coord[1], GLTF_HEIGHT);
+  activeThreeModel.scale.set(scale, scale, scale);
+  // 朝向：从 heading 取一个“前方点”，转成场景坐标算出实际行进方向，再让车头对准它（不依赖坐标系约定）
+  // 旋转用 'ZYX' 顺序：先绕 X 把模型立起来(Y-up→场景Z-up)，再绕地图竖直轴 Z 偏航 → 永远直立、只转弯不翻跟头
+  const hr = (heading + (currentMode().headingOffset ?? GLTF_HEADING_OFFSET)) * Math.PI / 180;
+  const ahead = getThreeCoords([point[0] + Math.sin(hr) * 0.01, point[1] + Math.cos(hr) * 0.01]);
+  let yaw = 0;
+  if (ahead) { const dx = ahead[0] - coord[0], dy = ahead[1] - coord[1]; if (dx || dy) yaw = Math.atan2(-dx, dy); }
+  activeThreeModel.rotation.set(Math.PI / 2, 0, yaw, 'ZYX');
+  setFallbackVisible(false);
+  if (map && map.render) map.render();
+  return true;
+}
+
+function switchThreeModel(point, heading){
+  if (!threeReady || !threeLoader || !threeScene) {
+    setFallbackVisible(true);
+    return Promise.resolve(false);
+  }
+  const mode = currentMode();
+  const show = model => {
+    if (activeThreeModel !== model) {
+      if (activeThreeModel) threeScene.remove(activeThreeModel);
+      threeScene.add(model);
+      activeThreeModel = model;
+    }
+    // 切换 active mixer：每种载具用自己的骑行动画
+    activeThreeMixer = threeMixers[mode.id] || null;
+    if (activeThreeMixer) { if (threeClock) threeClock.getDelta(); startAnimDriver(); }
+    const ok = updateThreeModel(point || lastRiderPoint || getFirstRoutePoint(), heading ?? lastRiderHeading);
+    setGltfStatus(ok ? `three-active:${mode.id}` : `three-position-failed:${mode.id}`);
+    return ok;
+  };
+  if (threeModels[mode.id]) return Promise.resolve(show(threeModels[mode.id]));
+
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      setFallbackVisible(true);
+      setGltfStatus(`three-model-timeout:${mode.id}`);
+      resolve(false);
+    }, 12000);
+    threeLoader.load(mode.modelUrl, gltf => {
+      clearTimeout(timer);
+      const inner = gltf.scene;
+      inner.traverse(obj => {
+        obj.frustumCulled = false;
+        if (obj.material) obj.material.side = THREE.DoubleSide;
+      });
+      // 套进一个组并居中：组的原点 = 模型底部中心，任意尺寸/偏移的模型都能正确居中落地（修 Akira 底部下沉）
+      const box = new THREE.Box3().setFromObject(inner);
+      const ctr = box.getCenter(new THREE.Vector3());
+      inner.position.set(-ctr.x, -box.min.y, -ctr.z);
+      const model = new THREE.Group();
+      model.name = `travel-${mode.id}`;
+      model.add(inner);
+      threeModels[mode.id] = model;
+      // 用户拍板 C：播放骑行动画（Akira 模型有 1 个 'Scene' clip）
+      if (gltf.animations && gltf.animations.length) {
+        const mixer = new THREE.AnimationMixer(inner);
+        mixer.clipAction(gltf.animations[0]).play();
+        threeMixers[mode.id] = mixer;
+      }
+      resolve(show(model));
+    }, undefined, err => {
+      clearTimeout(timer);
+      console.warn("Three.js model load failed, using CSS marker fallback.", err);
+      setFallbackVisible(true);
+      setGltfStatus(`three-model-failed:${mode.id}`);
+      resolve(false);
+    });
+  });
+}
+
+function startModelRenderer(){
+  if (modelRendererStarted) return;
+  modelRendererStarted = true;
+  initThreeLayer().then(threeOk => {
+    if (threeOk && travelReady) switchThreeModel(lastRiderPoint || getFirstRoutePoint(), lastRiderHeading);
+  });
+}
+
+// 动画驱动循环：有 mixer 时持续触发 map.render → 动画 → 骨骼变换
+function startAnimDriver(){
+  if (animDriverRaf) return;
+  const tick = () => {
+    if (activeThreeMixer && map && map.render) map.render();
+    animDriverRaf = requestAnimationFrame(tick);
+  };
+  animDriverRaf = requestAnimationFrame(tick);
+}
+
+function setMapPitch(pitch){
+  if (map && typeof map.setPitch === "function") map.setPitch(pitch);
+}
+
+function normalizePoint(point){
+  if (!Array.isArray(point) || point.length < 2) return null;
+  const lng = Number(point[0]), lat = Number(point[1]);
+  return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null;
+}
+
+function haversineMeters(a, b){
+  const R = 6371008.8;
+  const toRad = d => d * Math.PI / 180;
+  const lat1 = toRad(a[1]), lat2 = toRad(b[1]);
+  const dLat = lat2 - lat1, dLng = toRad(b[0] - a[0]);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function bearingDeg(a, b){
+  const toRad = d => d * Math.PI / 180;
+  const toDeg = r => r * 180 / Math.PI;
+  const lat1 = toRad(a[1]), lat2 = toRad(b[1]), dLng = toRad(b[0] - a[0]);
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+/* ---------- 轨迹平滑：等距重采样 → 高斯低通削抖 → 回抽密度 ----------------------
+ * （替代原 Catmull-Rom：经评测台实测，低通真把单帧航向 20.4°→18.9°，Catmull 几乎无效还会过冲）
+ * ★旋钮 MIN_TURN_RADIUS_M = “最小转弯半径”语义，满足“可调曲率”诉求：
+ *   调大 → 轨迹更圆更丝滑，但更偏离真实 GPS；调小 → 更贴真实轨迹，但急弯更明显。 */
+// ★平滑级别表（用页面上的「丝滑」按钮实时切换）：
+//   rdp    = 跳过多深的“小绕路/小毛刺/小误差”（米）——红框里那种小偏差会被直接剔除，不绕进去
+//   radius = 曲线圆顺程度（最小转弯半径,米）——越大越顺、越偏离真实路
+// ★按「偏离真实路多少公里」调平滑（用页面上的「丝滑」按钮实时切换）：
+//   devKm 越大 → 越无视真实路的弯绕、走越大的直扫弯（越激进），代价是偏离真实路越远
+const SMOOTH_LEVELS = [
+  { name: "关",   rdpM: 0,     scaleM: 0      },   // 完全贴真实轨迹，不平滑
+  { name: "跟路", rdpM: 250,   scaleM: 1500   },   // 默认：贴合真实公路，只去 GPS 毛刺噪音（像参考视频）
+  { name: "轻",   rdpM: 1500,  scaleM: 8000   },
+  { name: "中",   rdpM: 8000,  scaleM: 40000  },
+  { name: "强",   rdpM: 25000, scaleM: 120000 },
+  { name: "极",   rdpM: 60000, scaleM: 360000 },   // 大扫弯：几乎无视真实路
+];
+let smoothLevel = 3;               // 默认「中」（2026-06-10 用户验收拍板：比"轻"再顺一档；丝滑按钮可实时调）
+const SMOOTH_RESAMPLE_DS_M = 100;  // 低通前等距重采样间距（米）
+const SMOOTH_OUT_DS_M      = 120;  // 平滑后回抽间距（米）：密度与性能平衡
+
+function radiusToWindow(radiusM){
+  let w = Math.round((2 * radiusM) / SMOOTH_RESAMPLE_DS_M);  // 窗口物理跨度≈2倍转弯半径
+  if (w % 2 === 0) w += 1;
+  return Math.max(5, Math.min(8001, w));   // 盒式低通 O(n)，窗口可以很大（自动按路径长度封顶）
+}
+
+// 点到线段的垂直距离（米，本地平面近似）
+function perpDistM(p, a, b){
+  const kx = 111320 * Math.cos(a[1] * Math.PI / 180), ky = 110540;
+  const ax = a[0]*kx, ay = a[1]*ky, bx = b[0]*kx, by = b[1]*ky, px = p[0]*kx, py = p[1]*ky;
+  const dx = bx - ax, dy = by - ay, L2 = dx*dx + dy*dy;
+  if (L2 === 0) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax)*dx + (py - ay)*dy) / L2; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t*dx), py - (ay + t*dy));
+}
+// RDP 简化：偏离主线 < epsM 的点直接丢弃 → 跳过小绕路/小毛刺，但保留大转弯的形状
+function rdpSimplify(pts, epsM){
+  if (epsM <= 0 || pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length){
+    const seg = stack.pop(), s = seg[0], e = seg[1];
+    let maxD = 0, idx = -1;
+    for (let i = s + 1; i < e; i++){ const d = perpDistM(pts[i], pts[s], pts[e]); if (d > maxD){ maxD = d; idx = i; } }
+    if (maxD > epsM && idx > 0){ keep[idx] = 1; stack.push([s, idx]); stack.push([idx, e]); }
+  }
+  const out = []; for (let i = 0; i < pts.length; i++) if (keep[i]) out.push(pts[i]);
+  return out;
+}
+function resampleByArc(points, ds){
+  const P = [];
+  for (const raw of points){ const p = normalizePoint(raw); if (p && (!P.length || haversineMeters(P[P.length - 1], p) > 0.5)) P.push(p); }
+  if (P.length < 2) return P;
+  const out = [P[0]]; let acc = 0;
+  for (let i = 1; i < P.length; i++){
+    let a = P[i - 1]; const b = P[i]; let segLen = haversineMeters(a, b);
+    while (acc + segLen >= ds){ const t = (ds - acc) / segLen; const np = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; out.push(np); a = np; segLen = haversineMeters(a, b); acc = 0; }
+    acc += segLen;
+  }
+  const last = P[P.length - 1];
+  if (haversineMeters(out[out.length - 1], last) > ds * 0.25) out.push(last); else out[out.length - 1] = last;
+  return out;
+}
+// 低通平滑：3 次盒式滑动平均（≈高斯，但 O(n) 不受窗口大小影响，可做几十公里级激进平滑）
+function gaussLowpass(points, window, devCapM){
+  const n = points.length; if (n < 3 || window < 3) return points;
+  const radius = Math.max(1, Math.floor(window / 2));
+  let p = points;
+  for (let pass = 0; pass < 3; pass++){
+    const px = new Float64Array(n + 1), py = new Float64Array(n + 1);
+    for (let i = 0; i < n; i++){ px[i + 1] = px[i] + p[i][0]; py[i + 1] = py[i] + p[i][1]; }
+    const out = new Array(n);
+    for (let i = 0; i < n; i++){
+      if (i === 0 || i === n - 1){ out[i] = p[i]; continue; }   // 首尾固定
+      const r = Math.min(radius, i, n - 1 - i), lo = i - r, hi = i + r + 1, cnt = hi - lo;
+      out[i] = [(px[hi] - px[lo]) / cnt, (py[hi] - py[lo]) / cnt];
+    }
+    p = out;
+  }
+  if (devCapM > 0){   // 限制单点偏离原始位置（保真兜底）
+    for (let i = 0; i < n; i++){
+      const dev = haversineMeters(points[i], p[i]);
+      if (dev > devCapM){ const t = devCapM / dev; p[i] = [points[i][0] + (p[i][0] - points[i][0]) * t, points[i][1] + (p[i][1] - points[i][1]) * t]; }
+    }
+  }
+  return p;
+}
+// 保持 (points, perSeg) 签名，buildMotionPath 里 smoothPolyline(seg, 6) 无需改
+function smoothPolyline(points, perSeg){
+  const lv = SMOOTH_LEVELS[smoothLevel] || SMOOTH_LEVELS[0];
+  const base = points.map(normalizePoint).filter(Boolean);
+  if (!lv.scaleM || lv.scaleM <= 0 || base.length < 3) return base;   // 「关」：完全贴原始轨迹
+  let p = rdpSimplify(base, lv.rdpM);                        // 1) 剪掉浅于阈值的小绕路/毛刺
+  if (p.length < 2) return base;
+  p = resampleByArc(p, SMOOTH_RESAMPLE_DS_M);                // 2) 等距重采样
+  p = gaussLowpass(p, radiusToWindow(lv.scaleM), 0);         // 3) 低通磨圆（无 devCap → 不产生回弹尖角）
+  p = resampleByArc(p, SMOOTH_OUT_DS_M);                     // 4) 回抽密度
+  return p;
+}
+
+// 角度按最短路径插值，避免 359°→1° 硬转一整圈
+function lerpAngle(a, b, t){
+  const d = ((b - a + 540) % 360) - 180;
+  return (a + d * t + 360) % 360;
+}
+
+function easeInOutSine(t){ return -(Math.cos(Math.PI * t) - 1) / 2; }
+
+const MIN_BRIDGE_M = 200000;   // 空隙 >200km 才算“需要快速掠过的超大空隙(如跨海/坐车)”；更小的都并进一条 run 整体平滑（折返、接缝一起磨圆）
+
+// 把章节的多个 GPS 段合并成「连续段(run)」：小空隙(<MIN_BRIDGE_M)连着的段拼成一条整体来平滑
+// → 折返点、小接缝会被一起磨圆，不再有尖角；只有大空隙才断开成新 run（保留快进）
+function chapterRuns(segments){
+  const runs = [];
+  let cur = null, lastPt = null;
+  for (const seg of (segments || [])){
+    const pts = (seg || []).map(normalizePoint).filter(Boolean);
+    if (!pts.length) continue;
+    if (cur && lastPt && haversineMeters(lastPt, pts[0]) <= MIN_BRIDGE_M){
+      for (const p of pts) cur.push(p);          // 小空隙：并入当前 run
+    } else {
+      cur = pts.slice(); runs.push(cur);          // 大空隙或首段：新建 run
+    }
+    lastPt = pts[pts.length - 1];
+  }
+  return runs;
+}
+
+function buildMotionPath(chapter){
+  const legs = [];
+  let total = 0;
+  let last = null;            // 跨 run 保留：run 之间也连起来，小人不瞬移
+  chapterRuns(chapter.segments).forEach(run => {
+    const smooth = smoothPolyline(run, 6);        // 整条 run 一起平滑（含折返点）
+    smooth.forEach((cur, idx) => {
+      if (last) {
+        const d = haversineMeters(last, cur);
+        if (d > 0.5) {
+          // idx===0 表示这一腿是「上一个 run 末点 → 这个 run 首点」，即大空隙 → 标 bridge 快进
+          const bridge = idx === 0 && d > MIN_BRIDGE_M;
+          legs.push({ a:last, b:cur, d, start:total, end:total + d, heading:bearingDeg(last, cur), bridge });
+          total += d;
+        }
+      }
+      last = cur;
+    });
+  });
+  return { legs, total };
+}
+
+function sampleMotionPath(path, meters){
+  if (!path.legs.length) return null;
+  if (meters <= 0) {
+    const leg = path.legs[0];
+    return { point:leg.a, heading:leg.heading };
+  }
+  if (meters >= path.total) {
+    const leg = path.legs[path.legs.length - 1];
+    return { point:leg.b, heading:leg.heading };
+  }
+  let lo = 0, hi = path.legs.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (path.legs[mid].end < meters) lo = mid + 1;
+    else hi = mid;
+  }
+  const leg = path.legs[lo];
+  const t = Math.max(0, Math.min(1, (meters - leg.start) / leg.d));
+  return {
+    point: [leg.a[0] + (leg.b[0] - leg.a[0]) * t, leg.a[1] + (leg.b[1] - leg.a[1]) * t],
+    heading: leg.heading
+  };
+}
+
+function stopTravelAnimation(snapToEnd, reason){
+  if (!travelAnim) return;
+  cancelAnimationFrame(travelAnim.raf);
+  if (snapToEnd && travelAnim.finalSample) setRiderAt(travelAnim.finalSample.point, travelAnim.finalSample.heading);
+  const resolve = travelAnim.resolve;
+  travelAnim = null;
+  // reason="restart"：播放中调丝滑/换载具的重启请求 → playAll 收到后重播本章（而不是当成"用户中断"把连播链掐断）
+  if (resolve) resolve(reason === "restart" ? "restart" : false);
+}
+
+function pauseTravelAnimation(){
+  playing = false;
+  stopTravelAnimation(true);
+}
+
+function prepareChapterCamera(i, startPoint){
+  if (cameraMode === "follow") {
+    setMapPitch(52);
+    const z = Math.max(6.4, Math.min(7.5, map.getZoom ? map.getZoom() : 6.8));
+    if (typeof map.setZoomAndCenter === "function") map.setZoomAndCenter(z, startPoint);
+    else { map.setZoom(z); map.setCenter(startPoint); }
+  } else {
+    setMapPitch(34);
+    map.setFitView(chLines[i], false, [120, 120, 120, 430], 600);
+  }
+}
+
+const CAM_LERP = 0.12;          // 相机软跟随强度：越小越“拖”、越有电影感（0~1）
+const HEAD_LERP = 0.18;         // 朝向平滑强度（每帧朝目标朝向插值的比例）
+const MAX_HEADING_RATE_DEG = 12; // 每帧朝向最大变化(°)安全网：路径平滑后主要靠路顺，这里只兜底极端噪点尖峰；调小更稳但转向更迟
+const LOOKAHEAD_M = 90;         // 朝向/相机前瞻距离（米）：越大朝向越稳、越不被局部噪点带偏
+const PACE_TURN_K = 0.3;        // 进弯减速强度：0=匀速；越大过弯越慢越从容（电影感）
+const BRIDGE_GLIDE_MS = 450;    // 每个大空隙的“掠过”时长：快速但不瞬移
+
+function angleDiffDeg(a, b){ return Math.abs(((b - a + 540) % 360) - 180); }
+
+// 进弯减速：给“即将拐弯的腿”更长的播放时长 → 弯里待得久 → 车头转得从容（PACE_TURN_K=0 即关闭）
+function computePaceWeights(legs){
+  const w = new Array(legs.length).fill(1);
+  for (let i = 0; i < legs.length; i++){
+    if (legs[i].bridge){ w[i] = legs[i].d; continue; }       // 空隙腿用里程占位
+    let j = i + 1; while (j < legs.length && legs[j].bridge) j++;  // 跳过空隙找下一条真实路腿
+    const turn = j < legs.length ? angleDiffDeg(legs[i].heading, legs[j].heading) : 0;
+    w[i] = legs[i].d * (1 + PACE_TURN_K * Math.min(1, turn / 90));  // 时间权重 = 里程 ×(1+k·弯度)
+  }
+  return w;
+}
+
+// 空隙感知配速 + 进弯减速：road 腿按 pace 权重分配时间；GPS 空隙(bridge)给固定的短掠过时长。
+// msMin/msMax：时长档位——单章 [3.2s,17s]；全程一镜模式 [30s,140s]（2x 默认下 ≈70s）
+function buildPlayPlan(path, msMin = 3200, msMax = 17000){
+  const roadDist = path.legs.reduce((s, l) => s + (l.bridge ? 0 : l.d), 0) || 1;
+  const bridges = path.legs.filter(l => l.bridge).length;
+  const roadMs = Math.max(msMin, Math.min(msMax, (roadDist / 1000) * PLAYBACK_MS_PER_KM_AT_1X / currentMode().speed));
+  // 所有空隙合计不超过路段时长的 40%，单个空隙不超过 BRIDGE_GLIDE_MS
+  const bridgeMs = bridges ? Math.min(BRIDGE_GLIDE_MS, (roadMs * 0.4) / bridges) : 0;
+  const paceW = computePaceWeights(path.legs);
+  let paceSum = 0; path.legs.forEach((l, i) => { if (!l.bridge) paceSum += paceW[i]; });
+  if (paceSum <= 0) paceSum = 1;
+  const seg = [];
+  let t = 0;
+  path.legs.forEach((leg, i) => {
+    const ms = leg.bridge ? bridgeMs : (paceW[i] / paceSum) * roadMs;
+    seg.push({ leg, tStart: t, ms });
+    t += ms;
+  });
+  const duration = t || 1;
+  const metersAt = elapsed => {
+    if (elapsed <= 0) return 0;
+    if (elapsed >= duration) return path.total;
+    let lo = 0, hi = seg.length - 1;
+    while (lo < hi){ const mid = (lo + hi) >> 1; if (seg[mid].tStart + seg[mid].ms < elapsed) lo = mid + 1; else hi = mid; }
+    const e = seg[lo];
+    const frac = e.ms > 0 ? (elapsed - e.tStart) / e.ms : 1;
+    return e.leg.start + Math.max(0, Math.min(1, frac)) * e.leg.d;
+  };
+  return { duration, metersAt };
+}
+
+// ===== 沿途地名弹出牌：反查地名（带缓存）+ 投影触发 =====
+let geocoder = null, geocoderFailed = false;
+const placeNameCache = {};   // "lng,lat"(3位小数) -> 地名 | null(查过但失败)
+function placeKey(lng, lat){ return lng.toFixed(3) + "," + lat.toFixed(3); }
+// 进章节就预取该章代表点的地名（每章最多 8 个请求，结果进缓存；失败静默跳过，弹牌时查不到就不弹）
+function prefetchPlaceNames(points){
+  if (geocoderFailed || !window.AMap || !points || !points.length) return;
+  const todo = points.filter(p => !(placeKey(p.lng, p.lat) in placeNameCache));
+  if (!todo.length) return;
+  const run = () => todo.forEach((p, qi) => {
+    const key = placeKey(p.lng, p.lat);
+    placeNameCache[key] = placeNameCache[key] ?? null;   // 先占位，防重复请求
+    setTimeout(() => {     // 350ms 错开发请求：8 个点摊 2.8s，避开高德免费 key QPS 限流（一次性并发会被拒）
+    try {
+      geocoder.getAddress([p.lng, p.lat], (status, result) => {
+        if (status !== "complete" || !result || !result.regeocode) {
+          if (placeNameCache[key] === null) delete placeNameCache[key];   // 失败退回"未请求"，下次进章节自动重试
+          return;
+        }
+        {
+          const ac = result.regeocode.addressComponent || {};
+          // 颗粒度（用户定，2026-06-10）：弹地级市/县级市（盐城市/余姚市），不弹"区"（大丰区这种没辨识度）。
+          // 区级 district → 落到地级市 city；直辖市 city 为空 → 用 province 兜底（北京市/上海市…正好以"市"结尾）。
+          // ⚠️ 近海点（如舟山海域）高德把 province 填成"中华人民共和国"（实测）——黑名单挡掉，查不到就不弹。
+          const ok = v => (typeof v === "string" && v.trim() && v !== "中华人民共和国") ? v.trim() : "";
+          const d = ok(ac.district), c = ok(ac.city), p = ok(ac.province);
+          const nm = (d && !d.endsWith("区")) ? d : (c || (p.endsWith("市") ? p : ""));
+          if (nm) placeNameCache[key] = nm;
+        }
+      });
+    } catch(e){}
+    }, qi * 350);
+  });
+  if (geocoder) return run();
+  try {
+    AMap.plugin("AMap.Geocoder", () => {
+      try { geocoder = new AMap.Geocoder({ radius: 3000 }); run(); }
+      catch(e){ geocoderFailed = true; }
+    });
+  } catch(e){ geocoderFailed = true; }
+}
+
+// 把一个经纬度点投影到运动路径上 → 沿线里程(米)。用局部平面近似（米制），对几公里误差完全够用
+function projectOnPath(path, lng, lat){
+  const KX = 111320 * Math.cos(lat * Math.PI / 180), KY = 110540;
+  let best = null;
+  for (const leg of path.legs) {
+    if (leg.bridge) continue;   // 快进段不算"经过"
+    const dx = (leg.b[0] - leg.a[0]) * KX, dy = (leg.b[1] - leg.a[1]) * KY;
+    const px = (lng - leg.a[0]) * KX, py = (lat - leg.a[1]) * KY;
+    const L2 = dx*dx + dy*dy;
+    if (!L2) continue;
+    let t = (px*dx + py*dy) / L2;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    const ex = px - t*dx, ey = py - t*dy, d2 = ex*ex + ey*ey;
+    if (!best || d2 < best.d2) best = { d2, at: leg.start + t * leg.d };
+  }
+  return best;   // {d2: 离路径距离², at: 沿线里程} | null
+}
+
+// 沿运动路径等距取地名采样点（替代 repPoints 触发，2026-06-10 用户反馈修复）：
+// repPoints 离轨迹普遍偏 5~66km → 牌子钉得离骑手很远 + 逆地理查出"没真经过"的行政区（如擦边阿里却弹阿里）。
+// 改为点取在路径上：弹牌钉脚下零偏移、地名必是骑手所在行政区；落在快进空隙(bridge)上的采样点跳过（飞机/轮渡不算经过）。
+const PLACE_POINTS_PER_CH = 10;
+function chapterPlacePoints(path, n = PLACE_POINTS_PER_CH){
+  const pts = [];
+  if (!path.legs.length) return pts;
+  // 在"骑行里程"上等距（跳过 bridge 快进空隙再均分）：避免空隙占大头的章（如第二章 1667km 航段）采样点被剔得只剩两三个
+  const roadTotal = path.legs.reduce((s, l) => s + (l.bridge ? 0 : l.d), 0);
+  if (roadTotal <= 0) return pts;
+  // 单遍扫描取全部目标点（全程模式 19 万条腿 × 80 点，逐点全扫太慢）
+  const targets = [];
+  for (let k = 1; k <= n; k++) targets.push(roadTotal * k / (n + 1));
+  let acc = 0, ti = 0;
+  for (const leg of path.legs){
+    if (leg.bridge) continue;
+    while (ti < targets.length && acc + leg.d >= targets[ti]){
+      const at = leg.start + (targets[ti] - acc);
+      const s = sampleMotionPath(path, at);
+      if (s) pts.push({ lng: s.point[0], lat: s.point[1], at });
+      ti++;
+    }
+    acc += leg.d;
+    if (ti >= targets.length) break;
+  }
+  return pts;
+}
+
+// ===== 全程一镜模式（M9，用户定）：小人不分章一口气跑完整条轨迹 =====
+let journeyPathCache = null;
+function getJourneyPath(){
+  if (journeyPathCache) return journeyPathCache;
+  // 所有章节的 GPS 段按旅程顺序拼接，复用 buildMotionPath：章内/章间 >200km 空隙自动成 bridge 快进腿
+  const segsAll = [];
+  realChapters.forEach(({c}) => (c.segments || []).forEach(s => segsAll.push(s)));
+  journeyPathCache = buildMotionPath({ segments: segsAll });
+  return journeyPathCache;
+}
+
+// 每章在全程路径上的起始里程：播放跨过该里程 → 顶部章节标题/左下故事卡自动切换（运动和镜头不打断）
+function journeyChapterMarks(path){
+  const marks = [];
+  realChapters.forEach(({c, i}, k) => {
+    for (const seg of c.segments || []){
+      const p = normalizePoint(seg[0]);
+      if (p){
+        const pr = projectOnPath(path, p[0], p[1]);
+        if (pr) marks.push({ at: k === 0 ? 0 : pr.at, i });   // 第一章强制 0：开播即显示序章面板
+        break;
+      }
+    }
+  });
+  marks.sort((a, b) => a.at - b.at);
+  return marks;
+}
+
+// 在地图上弹一张地名小牌（CSS 动画自己淡出定格透明；marker 挂进 chMarkers 由章节切换统一清理）
+function popPlaceLabel(pos, name){
+  const el = document.createElement("div");
+  el.className = "place-pop";
+  el.innerHTML = `<div class="pp-pill">📍 ${name}</div><div class="pp-tail"></div>`;
+  const mk = new AMap.Marker({ position: pos, content: el, anchor: "bottom-center", offset: new AMap.Pixel(0, -4), zIndex: 120 });
+  map.add(mk); chMarkers.push(mk);
+}
+
+const motionPathCache = {};   // 缓存每章已构建的运动路径（平滑较耗时，避免重播/全程时反复构建卡顿）
+
+function playChapterMotion(i){ return playMotion({ type: "chapter", idx: i }); }
+function playJourney(opts = {}){ return playMotion({ type: "journey", resume: !!opts.resume }); }
+
+// 统一运动引擎（M9 重构）：单章与"全程一镜"共用同一套跟随/配速/弹牌/边走边画逻辑。
+// 差异仅在：路径来源、时长档位、触发表范围、章节面板是否随里程自动切换、resume 续播。
+function playMotion(spec){
+  if (!travelReady) return Promise.resolve(false);
+  stopTravelAnimation(false);
+  const isJourney = spec.type === "journey";
+  const path = isJourney ? getJourneyPath()
+    : (motionPathCache[spec.idx] || (motionPathCache[spec.idx] = buildMotionPath(CH[spec.idx])));
+  if (!path.legs.length) return sleep(1200).then(() => false);
+
+  const posAt = m => sampleMotionPath(path, Math.max(0, Math.min(path.total, m)));
+  const headingAt = m => {
+    const a = posAt(m - 1), b = posAt(m + LOOKAHEAD_M);
+    if (a && b && (a.point[0] !== b.point[0] || a.point[1] !== b.point[1])) return bearingDeg(a.point, b.point);
+    return (b || a).heading;
+  };
+
+  const plan = isJourney ? buildPlayPlan(path, 30000, 140000) : buildPlayPlan(path);
+  const first = posAt(0), last = posAt(path.total);
+  let smoothHeading = headingAt(0);
+  // 距离牌按"真实里程比例"换算显示：平滑会剪掉绕路（中档约 -23%），但给用户看的数字必须=真实骑行里程，
+  // 终点恰好对上总览页/收尾字幕的 35,056 km，且调丝滑档不会让里程数字变来变去
+  const realKm = isJourney ? TOTAL_KM : ((CH[spec.idx] && CH[spec.idx].stats && CH[spec.idx].stats.distanceKm) || Math.round(path.total / 1000));
+  const kmAt = m => Math.round(Math.max(0, Math.min(1, m / path.total)) * realKm);
+
+  // —— 沿途弹牌触发表：极点=全屏大牌，地名=地图小牌；journey 另加"章节面板切换标"（跨过即换标题/故事卡，不打断运动）——
+  const popTriggers = [];
+  const milestoneChs = isJourney ? realChapters.map(x => x.c) : [CH[spec.idx] || {}];
+  milestoneChs.forEach(c => (c.milestones || []).forEach(m => {
+    const pr = projectOnPath(path, m.lng, m.lat);
+    if (pr) popTriggers.push({ at: pr.at, type: "milestone", label: m.label });
+  }));
+  const placePts = chapterPlacePoints(path, isJourney ? PLACE_POINTS_PER_CH * realChapters.length : PLACE_POINTS_PER_CH);
+  placePts.forEach(pp => popTriggers.push({ at: pp.at, type: "place", lng: pp.lng, lat: pp.lat }));
+  if (isJourney) journeyChapterMarks(path).forEach(mk => popTriggers.push({ at: mk.at, type: "chapter", i: mk.i }));
+  popTriggers.sort((x, y) => x.at - y.at);
+  let popIdx = 0, lastPlaceName = "";
+  window.__popFired = [];   // 调试观测：本次播放弹过什么（验证用，不影响逻辑）
+  const switchChapterPanel = ci => {
+    curIdx = ci;
+    fillChapterPanel(ci);
+    $("#chapter").classList.remove("hide");
+    window.__popFired.push("chapter:" + ci);
+  };
+  const firePopsUpTo = meters => {
+    while (popIdx < popTriggers.length && popTriggers[popIdx].at <= meters) {
+      const tg = popTriggers[popIdx++];
+      if (tg.type === "milestone") {
+        flashMilestone(tg.label);
+        window.__popFired.push("milestone:" + tg.label);
+      } else if (tg.type === "chapter") {
+        switchChapterPanel(tg.i);
+      } else {
+        const nm = placeNameCache[placeKey(tg.lng, tg.lat)];
+        if (nm && nm !== lastPlaceName) {   // 连续同名去重；没查到就静默跳过
+          lastPlaceName = nm;
+          popPlaceLabel([tg.lng, tg.lat], nm);
+          window.__popFired.push("place:" + nm);
+        }
+      }
+    }
+  };
+  prefetchPlaceNames(placePts);
+
+  // —— 纯净播放模式（用户定）：没点亮的轨迹一概不画——隐掉预画章节线和路书底线，只留小人身后的亮轨迹 ——
+  hideAllChapterLines();
+  clearActiveSmoothLines();   // 内含 clearTrail：清底线 + 上一次的亮轨迹
+
+  // —— 边走边画（多段）：跨海/飞机空隙(bridge)断段另起，不再画"海南直插上海"的直线 ——
+  let curTrail = null, trailLegIdx = 0, lastTrailPt = null, frameNo = 0, pendingNewSeg = false;
+  const TRAIL_MIN_M = 600, TRAIL_UPDATE_EVERY = 3;   // 轨迹点密度/重绘频率：长路径防卡顿
+  const advanceTrail = meters => {
+    while (trailLegIdx < path.legs.length && path.legs[trailLegIdx].end <= meters) {
+      const leg = path.legs[trailLegIdx];
+      if (leg.bridge) {
+        pendingNewSeg = true;            // 飞机/轮渡：当前段封口，落地另起一段
+      } else {
+        if (pendingNewSeg || !curTrail) { curTrail = newTrailSeg(leg.a); lastTrailPt = leg.a.slice(); pendingNewSeg = false; }
+        if (haversineMeters(lastTrailPt, leg.b) > TRAIL_MIN_M) { curTrail.pts.push(leg.b.slice()); lastTrailPt = leg.b.slice(); }
+      }
+      trailLegIdx++;
+    }
+    // 已落地但落地腿尚未走完：从落地腿起点开新段，让线贴着脚下生长
+    if (pendingNewSeg && trailLegIdx < path.legs.length && !path.legs[trailLegIdx].bridge) {
+      curTrail = newTrailSeg(path.legs[trailLegIdx].a);
+      lastTrailPt = path.legs[trailLegIdx].a.slice();
+      pendingNewSeg = false;
+    }
+  };
+  const onBridgeNow = () => trailLegIdx < path.legs.length && path.legs[trailLegIdx].bridge;
+  const flushTrail = headPt => {
+    if (!curTrail) return;
+    const arr = headPt && !onBridgeNow() ? curTrail.pts.concat([headPt]) : curTrail.pts;   // 飞行中线头不跟（线不画向海/空中）
+    if (arr.length > 1) { curTrail.glow.setPath(arr); curTrail.core.setPath(arr); }
+  };
+
+  // —— 距离数字牌 ——
+  distBadgeEl = document.createElement("div");
+  distBadgeEl.style.cssText = "padding:3px 10px;border-radius:999px;background:#ff7a18;color:#fff;font-size:12px;font-weight:800;white-space:nowrap;box-shadow:0 2px 12px #000a;";
+  distBadgeEl.textContent = "0 公里";
+  if (!distBadgeVisible) distBadgeEl.style.display = "none";
+  distBadge = new AMap.Marker({ position: first.point, content: distBadgeEl, anchor: "center", offset: new AMap.Pixel(0, distBadgeOffsetPx()), zIndex: 131 });
+  map.add(distBadge);
+
+  // —— resume 续播（journey 播放中调丝滑/换载具）：从骑手当前位置继续，不从头跑 ——
+  const duration = plan.duration;
+  let elapsed = 0;
+  if (isJourney && spec.resume && lastRiderPoint) {
+    const pr = projectOnPath(path, lastRiderPoint[0], lastRiderPoint[1]);
+    if (pr && pr.at > 1000) {
+      let lo = 0, hi = duration;   // plan.metersAt 单调：二分出"缓动后虚拟时刻"
+      for (let q = 0; q < 48; q++){ const mid = (lo + hi) / 2; if (plan.metersAt(mid) < pr.at) lo = mid; else hi = mid; }
+      const e = Math.max(0, Math.min(1, lo / duration));
+      elapsed = (Math.acos(1 - 2 * e) / Math.PI) * duration;   // easeInOutSine 闭式反解：e=(1-cosπt)/2 → t=acos(1-2e)/π
+      advanceTrail(pr.at);                                     // 已走过的轨迹一次性画好
+      trailSegs.forEach(s => { if (s.pts.length > 1) { s.glow.setPath(s.pts); s.core.setPath(s.pts); } });
+      while (popIdx < popTriggers.length && popTriggers[popIdx].at <= pr.at) {   // 静默推进触发表：地名/极点不补弹，章节面板要对上
+        const tg = popTriggers[popIdx++];
+        if (tg.type === "chapter") switchChapterPanel(tg.i);
+      }
+    }
+  }
+  const startMeters = plan.metersAt(easeInOutSine(Math.min(1, elapsed / duration)) * duration);
+  const startSample = posAt(startMeters) || first;
+  smoothHeading = headingAt(startMeters);
+  setRiderAt(startSample.point, smoothHeading);
+  if (!curTrail && !onBridgeNow()) { curTrail = newTrailSeg(startSample.point); lastTrailPt = startSample.point.slice(); }   // 起步即有线头
+  if (isJourney) {
+    if (cameraMode === "follow") {
+      setMapPitch(52);
+      const z = Math.max(6.4, Math.min(7.5, map.getZoom ? map.getZoom() : 6.8));
+      map.setZoomAndCenter(z, startSample.point);
+    } else {
+      setMapPitch(34);
+      map.setFitView(chLines.flat(), false, [120, 120, 120, 430], 600);
+    }
+  } else {
+    prepareChapterCamera(spec.idx, first.point);
+  }
+  const camCenter = startSample.point.slice();
+
+  let lastNow = performance.now();
+  return new Promise(resolve => {
+    const tick = now => {
+      if (!travelAnim) return;
+      elapsed += Math.min(100, now - lastNow) * playbackRate;   // 倍速作用在累计时间上，可实时调（速度按钮）；单帧 dt 钳 100ms——切后台标签 rAF 暂停，回来时不把离开时长折算成进度（否则骑手瞬移）
+      lastNow = now;
+      const raw = Math.min(1, elapsed / duration);
+      const meters = plan.metersAt(easeInOutSine(raw) * duration);  // 首尾缓动 + 空隙感知配速
+      const sample = posAt(meters);
+      if (sample) {
+        // 朝目标朝向插值，但每帧变化量截断在 ±MAX_HEADING_RATE_DEG 内 → 砍掉急弯“甩头”尖峰（丝滑关键）
+        let hStep = ((((headingAt(meters) - smoothHeading + 540) % 360) - 180)) * HEAD_LERP;
+        if (hStep > MAX_HEADING_RATE_DEG) hStep = MAX_HEADING_RATE_DEG;
+        else if (hStep < -MAX_HEADING_RATE_DEG) hStep = -MAX_HEADING_RATE_DEG;
+        smoothHeading = (smoothHeading + hStep + 360) % 360;
+        setRiderAt(sample.point, smoothHeading);
+        advanceTrail(meters);                                       // 边走边画（跨空隙自动断段）
+        if (++frameNo % TRAIL_UPDATE_EVERY === 0) flushTrail(sample.point);
+        if (distBadge) { distBadge.setPosition(sample.point); distBadge.setOffset(new AMap.Pixel(0, distBadgeOffsetPx())); distBadgeEl.textContent = kmAt(meters).toLocaleString() + " 公里"; }
+        firePopsUpTo(meters);   // 沿途弹牌：经过极点/地名点/章节起点就触发
+        if (cameraMode === "follow") {
+          // 相机朝“小人略前方”缓动逼近，鸟瞰镜头丝滑不抖
+          const lead = posAt(meters + LOOKAHEAD_M * 1.5) || sample;
+          camCenter[0] += (lead.point[0] - camCenter[0]) * CAM_LERP;
+          camCenter[1] += (lead.point[1] - camCenter[1]) * CAM_LERP;
+          map.setCenter(camCenter);
+        }
+      }
+      if (raw >= 1) {
+        setRiderAt(last.point, smoothHeading);
+        advanceTrail(path.total);
+        flushTrail(last.point);
+        if (distBadge) { distBadge.setPosition(last.point); distBadge.setOffset(new AMap.Pixel(0, distBadgeOffsetPx())); distBadgeEl.textContent = realKm.toLocaleString() + " 公里"; }
+        firePopsUpTo(path.total);   // 收尾：终点附近的触发别漏
+        travelAnim = null;
+        resolve(true);
+        return;
+      }
+      travelAnim.raf = requestAnimationFrame(tick);
+    };
+    travelAnim = { raf:0, resolve, finalSample:last };
+    travelAnim.raf = requestAnimationFrame(tick);
+  });
+}
+
+async function boot(){
+  const [built, story, webp] = await Promise.all([
+    fetch("/chapters_built.json").then(r=>r.json()),
+    fetch("/story.json").then(r=>r.json()),
+    fetch("/web_photos.json").then(r=>r.json()).catch(()=>({})),
+  ]);
+  window.WEBPHOTOS = webp;
+  CH = built.chapters;
+  STORY = {};
+  (story.chapters||[]).forEach(c => STORY[c.name] = c.story);
+  $("#ovTitle").textContent = story.title || "把整个中国，画成一条线";
+  $("#ovIntro").textContent = story.intro || "";
+  TOTAL_KM = CH.filter(c=>!c.transition).reduce((a,c)=>a+(c.stats?.distanceKm||0),0);
+  $("#ovKm").textContent = (TOTAL_KM/10000).toFixed(1) + "万";
+
+  map = new AMap.Map("map", { zoom: 4, center: [104, 35], pitch: 0, viewMode: "3D", mapStyle: "amap://styles/dark" });
+  window.map = map;
+
+  // 画每章轨迹
+  CH.forEach((c, i) => {
+    const polys = [];
+    (c.segments||[]).forEach(seg => {
+      if (seg.length < 2) return;
+      polys.push(new AMap.Polyline({ path: seg, strokeColor:"#ff7a18", strokeWeight:6, strokeOpacity:.16, lineJoin:"round", zIndex:40 }));
+      polys.push(new AMap.Polyline({ path: seg, strokeColor:"#ffd06b", strokeWeight:2, strokeOpacity:.9, lineJoin:"round", zIndex:41 }));
+    });
+    polys.forEach(p => map.add(p));
+    chLines.push(polys);
+  });
+
+  // 章节列表（过滤转场）
+  realChapters = CH.map((c,i)=>({c,i})).filter(x=>!x.c.transition);
+  const list = $("#chlist");
+  realChapters.forEach(({c,i}, k) => {
+    const d = document.createElement("div"); d.className = "chcard";
+    const s = c.stats||{};
+    d.innerHTML = `<div class="cn">${c.name}</div><div class="cm">${c.dateStart}~${c.dateEnd} · ${s.days||0}天</div><div class="cb">${s.distanceKm||0} km · 海拔 ${s.altMin||0}~${s.altMax||0}m${c.milestones&&c.milestones.length?' · 🚩'+c.milestones.length+'个端点':''}</div>`;
+    d.onclick = () => { playing=false; enterChapter(i); };
+    list.appendChild(d);
+  });
+
+  // 零门槛开场（用户定，2026-06-10）：不再弹载具选择/播放按钮，进来直接默认摩托自动播放全程。
+  // 概览面板保留为"看完后的索引"：播放结束(收尾→返回总览)或点顶部「概览」时出现。
+  const FINALE_JUMP = !!new URLSearchParams(location.search).get("finale");
+  const revealEntry = () => {
+    if (entryShown) return;
+    entryShown = true;
+    $("#loading").style.display="none";
+    if (!FINALE_JUMP) autoStart();   // ?finale=1 时由下方调试分支接管，不抢播
+  };
+  initBgm();   // BGM 曲库加载（不阻塞主流程；自动播被浏览器拦截时首次点击补播）
+
+  map.on("complete", () => {
+    mapComplete = true;
+    startModelRenderer();
+    revealEntry();
+  });
+  setTimeout(() => {
+    revealEntry();
+    startModelRenderer();
+  }, 2500);
+
+  // 调试/演示直达收尾：story.html?finale=1 —— 跳过载具选择，地图就绪后直接放电影收尾（骑手摆终点、免跑 8 章）
+  if (new URLSearchParams(location.search).get("finale")){
+    travelReady = true;
+    // 防呆：立刻把 ?finale=1 从地址栏清掉——用户在这个标签页再刷新就回归"开场→8章→收尾"正常流程
+    //（上次验收后用户原标签页刷新，残留参数导致"一打开就放收尾"的困惑）
+    try { history.replaceState(null, "", location.pathname); } catch (e) {}
+    const go = () => { $("#loading").style.display = "none"; if (!finaleOn) playFinale({ debugJump: true }); };
+    map.on("complete", () => setTimeout(go, 400));
+    setTimeout(go, 3000);   // 兜底：瓦片加载慢/失败时 complete 不来，照样开播（playFinale 自带 finaleOn 防重入）
+  }
+}
+
+function fitAll(){ map.setFitView(chLines.flat(), false, [60,400,60,60]); }
+
+function showOverview(){
+  clearFinale();
+  curIdx = -1; playing = false;
+  chapterAutoToken++;
+  stopTravelAnimation(false);
+  clearChMarkers();
+  clearActiveSmoothLines();
+  chLines.forEach(polys => polys.forEach(p => { p.setOptions({ strokeOpacity: p.getOptions().strokeWeight>4?.16:.9 }); }));
+  map.setMapStyle("amap://styles/dark");
+  setMapPitch(0);
+  fitAll();
+  if (!riderMarker) setRiderAt(getFirstRoutePoint(), 0);
+  $("#overview").classList.toggle("hide", !travelReady);
+  $("#travelControls").classList.toggle("hide", !travelReady);
+  $("#chapter").classList.add("hide");
+}
+
+function clearChMarkers(){ chMarkers.forEach(m=>map.remove(m)); chMarkers=[]; }
+
+// 边走边画的亮色发光轨迹（多段：跨海/飞机空隙断开另起一段，不画直线硬连）+ 距离数字牌
+let trailSegs = [], distBadge = null, distBadgeEl = null;
+function newTrailSeg(startPt){
+  const glow = new AMap.Polyline({ path: [startPt], strokeColor: "#ff7a18", strokeWeight: 13, strokeOpacity: .4, lineJoin: "round", lineCap: "round", zIndex: 46 });
+  const core = new AMap.Polyline({ path: [startPt], strokeColor: "#ffe9b0", strokeWeight: 4, strokeOpacity: 1, lineJoin: "round", lineCap: "round", zIndex: 47 });
+  map.add(glow); map.add(core);
+  const seg = { glow, core, pts: [startPt.slice()] };
+  trailSegs.push(seg);
+  return seg;
+}
+function clearTrail(){
+  trailSegs.forEach(s => { try { map.remove(s.glow); map.remove(s.core); } catch(e){} });
+  trailSegs = [];
+  if (distBadge) { try { map.remove(distBadge); } catch(e){} }
+  distBadge = null; distBadgeEl = null;
+}
+
+// 播放专用"纯净模式"：未点亮的轨迹一概不画（用户定）——隐掉 boot 预画的全部章节线
+function hideAllChapterLines(){
+  chLines.forEach(polys => polys.forEach(p => p.setOptions({ strokeOpacity: 0 })));
+}
+
+function clearActiveSmoothLines(){ clearTrail(); activeSmoothLines.forEach(p => { try { map.remove(p); } catch(e){} }); activeSmoothLines = []; }
+
+// 用当前「丝滑」级别，把某章轨迹线画成平滑后的曲线（替换原始折线的显示），让看到的线本身就顺
+function drawActiveSmoothLine(i){
+  clearActiveSmoothLines();
+  const lv = SMOOTH_LEVELS[smoothLevel] || SMOOTH_LEVELS[0];
+  if (!lv.scaleM || lv.scaleM <= 0){   // 「关」：显示原始折线（沿用 dimOthers 的高亮）
+    (chLines[i] || []).forEach(p => { const glow = p.getOptions().strokeWeight > 4; p.setOptions({ strokeOpacity: glow ? 0.25 : 1, strokeColor: glow ? "#ff7a18" : "#ffd76b" }); });
+    return;
+  }
+  (chLines[i] || []).forEach(p => p.setOptions({ strokeOpacity: 0 }));   // 藏掉原始折线
+  chapterRuns(CH[i].segments).forEach(run => {   // 整条 run 一起平滑，接缝/折返点磨圆
+    const sm = smoothPolyline(run, 6);
+    if (sm.length < 2) return;
+    // 淡淡的“路书”底线（完整路线预览）；亮色发光轨迹由小人边走边画在它上面
+    activeSmoothLines.push(new AMap.Polyline({ path: sm, strokeColor: "#ff9d4d", strokeWeight: 2.5, strokeOpacity: .16, lineJoin: "round", lineCap: "round", zIndex: 42 }));
+  });
+  activeSmoothLines.forEach(p => map.add(p));
+}
+
+function dimOthers(active){
+  chLines.forEach((polys, i) => {
+    const on = i===active;
+    polys.forEach(p => {
+      const glow = p.getOptions().strokeWeight>4;
+      p.setOptions({ strokeOpacity: on ? (glow?.25:1) : 0.05, strokeColor: on ? (glow?"#ff7a18":"#ffd76b") : "#5a4a3a" });
+    });
+  });
+}
+
+// 章节面板内容（标题/故事/数据/相册条）：单章浏览和全程一镜的"随里程切章"共用
+function fillChapterPanel(i){
+  const c = CH[i];
+  const k = realChapters.findIndex(x=>x.i===i);
+  $("#chIdx").textContent = `第 ${k+1} / ${realChapters.length} 章`;
+  $("#chName").textContent = c.name.replace(/^.*· /,'');
+  $("#chStory").textContent = STORY[c.name] || c.theme;
+  const s = c.stats||{};
+  $("#chMeta").innerHTML = `<div class="m"><b>${s.distanceKm||0}</b><span>公里</span></div><div class="m"><b>${s.days||0}</b><span>天</span></div><div class="m"><b>${s.altMax||0}</b><span>最高海拔(m)</span></div>`;
+  renderPhotos(c);
+}
+
+async function enterChapter(i, opts = {}){
+  clearFinale();
+  curIdx = i;
+  chapterAutoToken++;
+  stopTravelAnimation(false);
+  const c = CH[i];
+  $("#overview").classList.add("hide");
+  $("#chapter").classList.remove("hide");
+  $("#travelControls").classList.toggle("hide", !travelReady);
+  clearChMarkers();
+  dimOthers(i);
+  drawActiveSmoothLine(i);   // 当前章按「丝滑」级别重画成平滑曲线
+
+  fillChapterPanel(i);
+
+  // 视野飞入（带地名底图：dark 在放大后显示路网地名）
+  map.setFitView(chLines[i], false, [120, 120, 120, 430], 1200);
+
+  // 代表点照片占位 marker（取4个）
+  (c.repPoints||[]).filter((_,idx)=>idx%2===0).forEach(rp => {
+    const el = document.createElement("div");
+    el.style.cssText = "width:22px;height:22px;border-radius:50%;background:#ffffffcc;border:2px solid #ff9d4d;display:flex;align-items:center;justify-content:center;font-size:11px;box-shadow:0 2px 8px #000a;";
+    el.textContent = "📷";
+    const m = new AMap.Marker({ position:[rp.lng,rp.lat], content:el, anchor:"center" });
+    map.add(m); chMarkers.push(m);
+  });
+
+  // 极点标记（金点常驻；全屏大牌改为播放时"骑到才弹"，见 playChapterMotion 的 popTriggers）
+  (c.milestones||[]).forEach(mil => {
+    const el = document.createElement("div");
+    el.style.cssText = "width:16px;height:16px;border-radius:50%;background:#ffd06b;border:2px solid #fff;box-shadow:0 0 16px #ffd06b;";
+    const m = new AMap.Marker({ position:[mil.lng,mil.lat], content:el, anchor:"center", zIndex:80 });
+    map.add(m); chMarkers.push(m);
+  });
+  // 进章节就预取路径采样点的地名，骑到时缓存已就绪（采样点与 playChapterMotion 同源：同 path 同参数 → 同坐标 → 缓存必命中）
+  const prePath = motionPathCache[i] || (motionPathCache[i] = buildMotionPath(c));
+  prefetchPlaceNames(chapterPlacePoints(prePath));
+  if (travelReady && opts.autoPlay !== false) {
+    const token = chapterAutoToken;
+    setTimeout(() => {
+      if (token === chapterAutoToken && curIdx === i) playChapterMotion(i);
+    }, 300);
+  }
+}
+
+function renderPhotos(c){
+  const ph = $("#chPh");
+  const wp = (window.WEBPHOTOS && window.WEBPHOTOS[c.name]) || {};
+  const photos = wp.photos || [];
+  if (photos.length){
+    ph.style.background = "none"; ph.style.height = "auto"; ph.style.display = "block";
+    ph.innerHTML = `<div class="pcount">📷 ${photos.length} 张照片${wp.videoCount?` · 🎬 ${wp.videoCount} 个视频`:''}</div>`
+      + `<div class="pstrip">` + photos.map(p => `<img src="/${p.file}" loading="lazy" onclick="lightbox('${p.file}')">`).join('') + `</div>`;
+  } else {
+    ph.style.height = "120px"; ph.style.display = "flex"; ph.style.background = "linear-gradient(135deg,#2a3550,#11161f)";
+    const reg = (c.region||'').split('→')[0];
+    ph.innerHTML = `<span class="cam">📷</span><span class="t">你在「${reg}」的照片在 iCloud 里<br>下载后会自动补到这里</span>`;
+  }
+}
+function lightbox(f){   // 章节相册的单图查看：重置簇浏览残留的切图 onclick 和计数条
+  const lb = $("#lb"), img = lb.querySelector('img');
+  img.onclick = null;
+  $("#lbMeta").textContent = "";
+  img.src = '/'+f;
+  lb.classList.add('show');
+}
+
+async function flashMilestone(label){
+  $("#msLab").textContent = label;
+  $("#milestone").classList.add("show");
+  await sleep(2200);
+  $("#milestone").classList.remove("show");
+}
+
+/* ===== M10 BGM：bgm/ 文件夹曲库 + 本机临时加载 + 切换/音量（记住选择）===== */
+let bgmTracks = [], bgmIdx = -1, bgmWantPlay = false;   // bgmWantPlay：自动播被浏览器策略拦下，等首次交互补播
+const bgmAudio = () => $("#bgmAudio");
+
+async function initBgm(){
+  try {
+    const r = await fetch("/api/bgm_list");
+    if (r.ok){
+      const d = await r.json();
+      (d.files || []).forEach(f => bgmTracks.push({ name: f.replace(/\.[^.]+$/, ""), url: "/bgm/" + encodeURIComponent(f) }));
+    } else if (r.status === 404){
+      $("#bgmList").innerHTML = `<div class="bgm-empty">⚠️ 服务器还是旧版本：终端里 Ctrl+C 停掉后重新 <b>python3 server.py</b>，刷新页面才能读取 bgm/ 文件夹（「＋ 添加」不受影响）。</div>`;
+    }
+  } catch (e) {}
+  const a = bgmAudio();
+  a.volume = (parseInt(localStorage.getItem("bgmVol") || "70", 10)) / 100;
+  $("#bgmVol").value = Math.round(a.volume * 100);
+  a.addEventListener("ended", () => { if (bgmTracks.length) playBgmIndex((bgmIdx + 1) % bgmTracks.length); });   // 列表循环
+  a.addEventListener("play", updateBgmUi);
+  a.addEventListener("pause", updateBgmUi);
+  $("#bgmFile").addEventListener("change", e => {
+    const files = [...(e.target.files || [])];
+    if (!files.length) return;
+    const startIdx = bgmTracks.length;
+    files.forEach(f => bgmTracks.push({ name: f.name.replace(/\.[^.]+$/, ""), url: URL.createObjectURL(f), local: true }));
+    playBgmIndex(startIdx);
+    e.target.value = "";
+  });
+  // 浏览器自动播放策略：未交互前 play() 会被拒 → 首次点击/触摸页面时补播
+  document.addEventListener("pointerdown", () => {
+    if (bgmWantPlay) bgmAudio().play().then(() => { bgmWantPlay = false; updateBgmUi(); }).catch(() => {});
+  }, true);
+  if (bgmTracks.length){
+    const saved = parseInt(localStorage.getItem("bgmIdx") || "0", 10);
+    playBgmIndex(Math.min(bgmTracks.length - 1, Math.max(0, saved)));
+  } else renderBgmList();
+}
+
+function renderBgmList(){
+  const box = $("#bgmList");
+  if (!bgmTracks.length){
+    if (!box.innerHTML.includes("旧版本"))   // 旧服务器提示别覆盖
+      box.innerHTML = `<div class="bgm-empty">还没有音乐：点「＋ 添加」选本机音乐，或把 mp3 放进项目 <b>bgm/</b> 文件夹后刷新。</div>`;
+    return;
+  }
+  box.innerHTML = bgmTracks.map((t, k) =>
+    `<div class="bgm-item ${k === bgmIdx ? "active" : ""}" onclick="playBgmIndex(${k})"><span>${k === bgmIdx ? "♪" : "·"}</span><span class="nm">${t.name}${t.local ? " ·临时" : ""}</span></div>`).join("");
+}
+
+function playBgmIndex(k){
+  if (!bgmTracks[k]) return;
+  bgmIdx = k;
+  localStorage.setItem("bgmIdx", String(k));
+  const a = bgmAudio();
+  a.src = bgmTracks[k].url;
+  a.play().then(() => { bgmWantPlay = false; updateBgmUi(); })
+    .catch(() => { bgmWantPlay = true; updateBgmUi(); });
+  renderBgmList();
+}
+
+function bgmTogglePlay(){
+  const a = bgmAudio();
+  if (!a.src){ if (bgmTracks.length) playBgmIndex(Math.max(0, bgmIdx)); return; }
+  if (a.paused) a.play().catch(() => { bgmWantPlay = true; updateBgmUi(); });
+  else { a.pause(); bgmWantPlay = false; }
+}
+
+function updateBgmUi(){
+  const a = bgmAudio();
+  const on = a.src && !a.paused;
+  $("#bgmPlayBtn").textContent = on ? "⏸" : "▶";
+  $("#bgmBtn").textContent = on ? "🎵 播放中" : "🎵 BGM";
+}
+
+function setBgmVolume(v){
+  bgmAudio().volume = v / 100;
+  localStorage.setItem("bgmVol", String(v));
+}
+function toggleBgmPanel(){ $("#bgmPanel").classList.toggle("show"); }
+
+// 开场点火音效（独立音效轨，与 BGM 分轨并行）：全程起步瞬间"启动马达→点燃→轰油门"，电影开场感。
+// 彩蛋性质：自动播被浏览器拦就静默放弃（不补播，错过时机没意义）；音量跟随 BGM 音量（用户拉 0 即全静）。
+let sfxIgnition = null;
+function playIgnitionSfx(){
+  try {
+    if (!sfxIgnition) sfxIgnition = new Audio("/sfx/ignition.wav");
+    const bgmVol = bgmAudio() ? bgmAudio().volume : 0.7;
+    sfxIgnition.volume = Math.min(1, bgmVol * 0.85);
+    sfxIgnition.currentTime = 0;
+    sfxIgnition.play().catch(() => {});
+  } catch (e) {}
+}
+function addLocalBgm(){ $("#bgmFile").click(); }
+
+/* ===== M4 电影级收尾：抵达定格 → 拉远 + 全程流光 → 照片聚合卡片（参考用户"图2"：Apple 照片地图）=====
+ * 节奏固定不吃倍速（电影感可控）：幕1 停 1.3s → 幕2 拉远 5.2s（流光延迟 0.6s 起步、提前 0.2s 扫完）→ 幕3 卡片每 150ms 弹一张。 */
+const FINALE_PULL_MS = 5200;
+const FINALE_FLOW_DELAY = 600;
+const FINALE_CARD_STAGGER = 150;
+const CLUSTER_D1_M = 80000;     // 照片地理聚类：80km 内归一簇（node 评测：325 张 → 10~11 簇）
+const CARD_PX_GAP = 70;         // 定格 zoom 下卡片中心最小像素距：小簇并入大簇 → 卡片互不重叠
+
+function easeInOutCubic(t){ return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; }
+
+// Web Mercator 全球像素坐标（zoom z）：聚类避让 + 全国定格视野计算共用，纯数学不动地图
+function mercX(lng, z){ return (lng + 180) / 360 * 256 * Math.pow(2, z); }
+function mercY(lat, z){ const s = Math.sin(lat * Math.PI / 180); return (.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256 * Math.pow(2, z); }
+
+// 全程 bounds → 定格目标 {zoom, center}。底部 padding 比顶部大：给字幕留位；center 用 mercator 中点反算（纬度跨 18°~54°，算术平均会偏北）
+function finaleFitView(){
+  const size = (map.getSize && map.getSize()) || { width: innerWidth, height: innerHeight };
+  const W = size.width || innerWidth, H = size.height || innerHeight;
+  let latMin = 90, latMax = -90, lngMin = 180, lngMax = -180;
+  realChapters.forEach(({c}) => (c.segments || []).forEach(seg => seg.forEach(pt => {
+    const p = normalizePoint(pt); if (!p) return;
+    if (p[0] < lngMin) lngMin = p[0]; if (p[0] > lngMax) lngMax = p[0];
+    if (p[1] < latMin) latMin = p[1]; if (p[1] > latMax) latMax = p[1];
+  })));
+  const padX = 120, padTop = 110, padBot = 185;
+  let zoom = 3;
+  for (let z = 10; z >= 2.5; z -= .05){
+    if (mercX(lngMax, z) - mercX(lngMin, z) <= W - padX * 2 && mercY(latMin, z) - mercY(latMax, z) <= H - padTop - padBot){ zoom = z; break; }
+  }
+  const scale = 256 * Math.pow(2, zoom);
+  const midX = (mercX(lngMin, zoom) + mercX(lngMax, zoom)) / 2;
+  const midY = (mercY(latMin, zoom) + mercY(latMax, zoom)) / 2 + (padBot - padTop) / 2;
+  const n = Math.PI * (1 - 2 * midY / scale);
+  return { zoom, center: [ midX / scale * 360 - 180, Math.atan(.5 * (Math.exp(n) - Math.exp(-n))) * 180 / Math.PI ] };
+}
+
+// 全程流光路径：各章 runs 平滑后顺序相连，stride 抽稀（平滑输出等距 120m × stride 150 ≈ 18km/点，全国视野 ~6km/px 下足够顺）。
+// 再按大空隙切成多段 runs：相邻点 >MIN_BRIDGE_M(200km) = 飞机/轮渡等非骑行移动（如海南→上海航段），流光分段画、空隙不画直线硬连。
+function buildFinalePath(){
+  if (finalePathCache) return finalePathCache;
+  const all = [];
+  realChapters.forEach(({c}) => chapterRuns(c.segments).forEach(run => {
+    const sm = smoothPolyline(run, 6);
+    for (let k = 0; k < sm.length; k += 150) all.push(sm[k]);
+    if (sm.length) all.push(sm[sm.length - 1]);
+  }));
+  const runs = [];
+  let cur = [];
+  for (const p of all){
+    if (cur.length && haversineMeters(cur[cur.length - 1], p) > MIN_BRIDGE_M){
+      if (cur.length > 1) runs.push(cur);
+      cur = [];
+    }
+    cur.push(p);
+  }
+  if (cur.length > 1) runs.push(cur);
+  finalePathCache = { runs, total: runs.reduce((s, r) => s + r.length, 0) };
+  return finalePathCache;
+}
+
+// 照片聚类：章节顺序遍历(=旅程时间序) → 80km 贪心归簇 → 定格 zoom 下像素避让合并。
+// 照片 EXIF GPS 是 WGS-84、地图是 GCJ-02，偏差几百米 < 全国视野 1px，可忽略不转换。
+function buildPhotoClusters(targetZoom){
+  const photos = [];
+  Object.values(window.WEBPHOTOS || {}).forEach(grp => (grp.photos || []).forEach(p => { if (p.gps) photos.push(p); }));
+  let cl = [];
+  photos.forEach((p, ord) => {
+    let best = null, bd = Infinity;
+    cl.forEach(c => { const d = haversineMeters(c.center, p.gps); if (d < bd){ bd = d; best = c; } });
+    if (best && bd < CLUSTER_D1_M){
+      best.members.push(p);
+      best.center = [ best.members.reduce((s,m)=>s+m.gps[0],0)/best.members.length, best.members.reduce((s,m)=>s+m.gps[1],0)/best.members.length ];
+    } else cl.push({ center: p.gps.slice(), members: [p], ord });
+  });
+  let merged = true;
+  while (merged){
+    merged = false;
+    outer:
+    for (let i = 0; i < cl.length; i++) for (let j = i + 1; j < cl.length; j++){
+      const a = cl[i], b = cl[j];
+      const dpx = Math.hypot(mercX(a.center[0], targetZoom) - mercX(b.center[0], targetZoom),
+                             mercY(a.center[1], targetZoom) - mercY(b.center[1], targetZoom));
+      if (dpx < CARD_PX_GAP){
+        const big = a.members.length >= b.members.length ? a : b, small = big === a ? b : a;
+        big.members.push(...small.members);
+        big.ord = Math.min(big.ord, small.ord);
+        big.center = [ big.members.reduce((s,m)=>s+m.gps[0],0)/big.members.length, big.members.reduce((s,m)=>s+m.gps[1],0)/big.members.length ];
+        cl = cl.filter(c => c !== small);
+        merged = true; break outer;
+      }
+    }
+  }
+  cl.sort((x, y) => x.ord - y.ord);   // 弹出顺序 = 旅程顺序
+  return cl;
+}
+
+// 卡片封面用 200px 缩略图（64px 显示加载 1280px 大图太浪费：~320KB→~12KB）；缩略缺失时回退原图
+const thumbUrl = f => encodeURI("/photos_web/_thumbs/" + f.replace(/^photos_web\//, ""));
+
+function addPhotoCard(c){
+  try {   // 投影坏死（瓦片加载失败的环境）时单张卡片跳过，不断收尾流程
+    const el = document.createElement("div");
+    el.className = "photo-card";
+    el.innerHTML = `<div class="pc-frame"><img src="${thumbUrl(c.members[0].file)}" onerror="this.onerror=null;this.src='${encodeURI("/" + c.members[0].file)}'" alt=""><span class="pc-count">${c.members.length}</span></div><div class="pc-tail"></div>`;
+    el.onclick = () => openClusterLightbox(c);   // 点卡片 → 大图浏览这个地点的所有照片
+    const mk = new AMap.Marker({ position: c.center, content: el, anchor: "bottom-center", zIndex: 135 });
+    map.add(mk); finaleMarkers.push(mk);
+  } catch (e) {}
+}
+
+// 簇内照片大图浏览：复用 #lb 灯箱，点图片切下一张、点黑底关闭
+function openClusterLightbox(cluster){
+  const lb = $("#lb"), img = lb.querySelector("img"), meta = $("#lbMeta");
+  let k = 0;
+  const show = () => {
+    img.src = encodeURI("/" + cluster.members[k].file);
+    meta.textContent = `${k + 1} / ${cluster.members.length} · 点图片看下一张`;
+  };
+  img.onclick = e => { e.stopPropagation(); k = (k + 1) % cluster.members.length; show(); };
+  show();
+  lb.classList.add("show");
+}
+
+// 收尾纯流光（用户定：没点亮的轨迹一概不画）——预画章节线全隐，画面只有流光扫过的亮线
+function dimLinesForFinale(){
+  hideAllChapterLines();
+}
+
+function removeDistBadge(){
+  if (distBadge){ try { map.remove(distBadge); } catch(e){} }
+  distBadge = null; distBadgeEl = null;
+}
+
+// 地图投影就绪检测：complete 前 lngLatToContainer 算出 NaN，此时加 Marker 会抛 Pixel(NaN,NaN)
+function projectionReady(){
+  try {
+    const px = map.lngLatToContainer([104, 35]);
+    const x = px && (px.x ?? (px.getX && px.getX()));
+    return Number.isFinite(x);
+  } catch (e) { return false; }
+}
+
+function makeFlowLines(firstPt){
+  const glowLine = new AMap.Polyline({ path: [firstPt], strokeColor: "#ff7a18", strokeWeight: 9, strokeOpacity: .45, lineJoin: "round", lineCap: "round", zIndex: 48 });
+  const coreLine = new AMap.Polyline({ path: [firstPt], strokeColor: "#ffe9b0", strokeWeight: 3, strokeOpacity: 1, lineJoin: "round", lineCap: "round", zIndex: 49 });
+  map.add(glowLine); map.add(coreLine);
+  finaleObjs.push(glowLine, coreLine);
+  return { glowLine, coreLine };
+}
+
+function showFinaleCaption(){
+  const photoCount = Object.values(window.WEBPHOTOS || {}).reduce((s, g) => s + ((g.photos || []).length), 0);
+  const days = CH.reduce((s, c) => s + (c.stats?.days || 0), 0);   // 含转场休整 = 222，与总览页一致
+  $("#finaleCaption .fc-main").textContent = `环中国 · ${TOTAL_KM.toLocaleString()} 公里 · ${days} 天 · ${photoCount} 张照片`;
+  $("#finaleCaption").classList.add("show");
+  $("#finaleSkipBtn").style.display = "none";
+  $("#finaleReplayBtn").style.display = "";
+  $("#finaleExitBtn").style.display = "";
+}
+
+// 定格画面「再看一遍」：清收尾、直接重播全程（不回总览，演示场景一键循环）
+function replayAll(){
+  clearFinale();
+  $("#overview").classList.add("hide");
+  $("#chapter").classList.add("hide");
+  playAll();
+}
+
+async function playFinale(opts = {}){
+  if (finaleOn) return;
+  finaleOn = true;
+  const token = ++finaleToken;
+  playing = false;
+  stopTravelAnimation(false);
+  $("#overview").classList.add("hide");
+  $("#chapter").classList.add("hide");
+  $("#travelControls").classList.add("hide");
+  $("#finaleBtns").classList.add("show");
+  $("#finaleSkipBtn").style.display = "";
+  $("#finaleReplayBtn").style.display = "none";
+  $("#finaleExitBtn").style.display = "none";
+
+  const fit = finaleFitView();
+  const fp = buildFinalePath();
+  if (fp.total < 2){ exitFinale(); return; }
+  const clusters = buildPhotoClusters(fit.zoom);
+  clusters.forEach(c => { const im = new Image(); im.src = thumbUrl(c.members[0].file); });   // 预载卡片封面（200px 缩略）
+
+  // 投影未就绪（complete 前）加 Marker 必抛 Pixel(NaN)：慢网下 ?finale=1 的 3s 兜底可能跑在 complete 前 → 等就绪再开演（最多 6s，等不到就靠各 marker 的 try 跳过）
+  for (let w = 0; w < 40 && !projectionReady(); w++){ if (map.render) map.render(); await sleep(150); }
+  if (token !== finaleToken) return;
+
+  // —— 幕1 · 抵达：停一拍，距离牌亮出全程总里程 ——
+  const lastRun = fp.runs[fp.runs.length - 1];
+  const endPt = lastRun[lastRun.length - 1];
+  if (opts.debugJump){   // ?finale=1 直达：骑手摆到终点、相机摆到近景，免跑 8 章
+    try { setRiderAt(endPt, 0); } catch (e) {}
+    setMapPitch(52);
+    map.setZoomAndCenter(7.2, endPt, true);
+    await sleep(800);
+  } else {
+    if (distBadgeEl){
+      distBadgeEl.textContent = `全程 ${TOTAL_KM.toLocaleString()} 公里`;
+      distBadgeEl.style.animation = "badgePulse .9s ease";
+    }
+    await sleep(1300);
+  }
+  if (token !== finaleToken) return;
+
+  // —— 幕2 · 拉远 + 流光：相机插值（近景俯冲 → 全国平视野）+ 一道光沿全程轨迹扫到终点 ——
+  clearChMarkers(); clearActiveSmoothLines(); removeDistBadge();
+  dimLinesForFinale();
+  const segs = fp.runs.map(r => makeFlowLines(r[0]));   // 每个骑行段一对发光线：段间空隙（飞机/轮渡）不画线
+  const segStart = [];
+  { let acc = 0; for (const r of fp.runs){ segStart.push(acc); acc += r.length; } }
+  const headEl = document.createElement("div");
+  headEl.className = "flow-head";
+  let headMk = null;
+  try {
+    headMk = new AMap.Marker({ position: fp.runs[0][0], content: headEl, anchor: "center", zIndex: 132 });
+    map.add(headMk); finaleMarkers.push(headMk);
+  } catch (e) {}
+
+  const startZoom = map.getZoom ? map.getZoom() : 7;
+  const startPitch = map.getPitch ? map.getPitch() : 52;
+  const c0 = map.getCenter && map.getCenter();
+  const startCenter = c0 ? [c0.lng, c0.lat] : endPt.slice();
+  const fillAllSegs = () => segs.forEach((sg, q) => { try { sg.glowLine.setPath(fp.runs[q]); sg.coreLine.setPath(fp.runs[q]); } catch (e) {} });
+  await new Promise(res => {
+    const t0 = performance.now();
+    let lastIdx = 0, tickErrs = 0, doneSeg = -1;   // doneSeg：已画满的最大段号（光头越过的段一次性补满）
+    const tick = now => {
+      if (token !== finaleToken) return res();
+      const t = Math.min(1, (now - t0) / FINALE_PULL_MS);
+      try {
+        const e = easeInOutCubic(t);
+        map.setZoomAndCenter(
+          startZoom + (fit.zoom - startZoom) * e,
+          [ startCenter[0] + (fit.center[0] - startCenter[0]) * e, startCenter[1] + (fit.center[1] - startCenter[1]) * e ],
+          true
+        );
+        setMapPitch(startPitch * (1 - e));
+        const ft = Math.max(0, Math.min(1, (now - t0 - FINALE_FLOW_DELAY) / (FINALE_PULL_MS - FINALE_FLOW_DELAY - 200)));
+        const gIdx = Math.max(1, Math.round(easeInOutSine(ft) * (fp.total - 1)));
+        if (gIdx > lastIdx){
+          let s = 0;
+          while (s + 1 < fp.runs.length && segStart[s + 1] <= gIdx) s++;
+          for (let q = doneSeg + 1; q < s; q++){ try { segs[q].glowLine.setPath(fp.runs[q]); segs[q].coreLine.setPath(fp.runs[q]); } catch (e2) {} }
+          if (s - 1 > doneSeg) doneSeg = s - 1;
+          const local = gIdx - segStart[s];
+          const part = fp.runs[s].slice(0, local + 1);
+          segs[s].glowLine.setPath(part); segs[s].coreLine.setPath(part);
+          if (headMk) headMk.setPosition(fp.runs[s][local]);   // 跨段时光头直接跳过空隙（飞机/轮渡本来就是瞬移）
+          lastIdx = gIdx;
+        }
+        tickErrs = 0;
+      } catch (err) {
+        // 单帧异常跳过；连续异常=地图引擎瘫了（瓦片加载失败的环境）→ 放弃运镜直接进定格，绝不卡死黑屏
+        if (++tickErrs > 20){ try { fillAllSegs(); } catch (e2) {} return res(); }
+      }
+      if (t >= 1){
+        headEl.style.transition = "opacity .8s"; headEl.style.opacity = "0";   // 光头到终点后熄灭
+        try { fillAllSegs(); } catch (e2) {}                                   // 收口：进度取整可能差最后几个点，定格前补满
+        return res();
+      }
+      finaleRaf = requestAnimationFrame(tick);
+    };
+    finaleRaf = requestAnimationFrame(tick);
+  });
+  if (token !== finaleToken) return;
+
+  // —— 幕3 · 照片聚合卡片按旅程顺序弹出 + 定格字幕 ——
+  for (const c of clusters){
+    if (token !== finaleToken) return;
+    addPhotoCard(c);
+    await sleep(FINALE_CARD_STAGGER);
+  }
+  if (token !== finaleToken) return;
+  showFinaleCaption();
+}
+
+// 跳过运镜：一步到位重建定格画面（相机/流光/卡片/字幕全量就位）
+function skipFinale(){
+  finaleToken++;
+  cancelAnimationFrame(finaleRaf);
+  finaleOn = true;
+  clearFinaleOverlays();
+  clearChMarkers(); clearActiveSmoothLines(); removeDistBadge();
+  dimLinesForFinale();
+  const fit = finaleFitView();
+  const fp = buildFinalePath();
+  setMapPitch(0);
+  map.setZoomAndCenter(fit.zoom, fit.center, true);
+  fp.runs.forEach(r => { try { const { glowLine, coreLine } = makeFlowLines(r[0]); glowLine.setPath(r); coreLine.setPath(r); } catch (e) {} });
+  buildPhotoClusters(fit.zoom).forEach(addPhotoCard);
+  showFinaleCaption();
+}
+
+function clearFinaleOverlays(){
+  finaleObjs.forEach(o => { try { map.remove(o); } catch(e){} });
+  finaleMarkers.forEach(m => { try { map.remove(m); } catch(e){} });
+  finaleObjs = []; finaleMarkers = [];
+}
+
+function clearFinale(){
+  if (!finaleOn && !finaleObjs.length && !finaleMarkers.length) return;
+  finaleToken++;
+  cancelAnimationFrame(finaleRaf);
+  clearFinaleOverlays();
+  // 恢复章节线原色（压暗时改过 strokeColor；透明度由 showOverview/dimOthers 各自接管）
+  chLines.forEach(polys => polys.forEach(p => {
+    const glow = p.getOptions().strokeWeight > 4;
+    p.setOptions({ strokeColor: glow ? "#ff7a18" : "#ffd06b" });
+  }));
+  $("#finaleCaption").classList.remove("show");
+  $("#finaleBtns").classList.remove("show");
+  finaleOn = false;
+}
+
+function exitFinale(){ clearFinale(); showOverview(); }
+window.__finale = playFinale;   // console 调试入口
+
+function nextCh(){
+  const k = realChapters.findIndex(x=>x.i===curIdx);
+  if (k < realChapters.length-1) enterChapter(realChapters[k+1].i);
+  else showOverview();
+}
+function prevCh(){
+  const k = realChapters.findIndex(x=>x.i===curIdx);
+  if (k > 0) enterChapter(realChapters[k-1].i);
+  else showOverview();
+}
+
+async function playAll(){
+  playing = true;
+  clearFinale();
+  playIgnitionSfx();   // 起步点火：独立音效轨，BGM 同时进场（电影开场感）
+  $("#overview").classList.add("hide");
+  $("#chapter").classList.add("hide");   // 章节面板由 journey 跨过各章起点时自动亮出并切换
+  clearChMarkers();
+  // M9 一镜到底（用户定）：小人从丹东一口气跑到终点，不再分章打断；章节面板随里程自动切换
+  let completed = await playJourney();
+  // 播放中调丝滑/换载具 → "restart" → 从骑手当前位置续播（不从头），链不断
+  while (completed === "restart" && playing) completed = await playJourney({ resume: true });
+  if (!playing || !completed) return;
+  if (playing) playFinale();   // 跑完全程 → 电影级收尾（拉远+流光+照片聚合）
+}
+
+window.onload = boot;
+</script>
+</body>
+</html>

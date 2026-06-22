@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;height:100%;background:#0b0e14;overflow:hidden}
+#info{position:fixed;top:10px;left:12px;color:#cfe;font:14px ui-monospace,monospace;z-index:10;text-shadow:0 1px 3px #000}</style>
+</head><body>
+<div id="info">loading…</div>
+<script type="module">
+import * as THREE from '/vendor/three/three.module.js';
+import { GLTFLoader } from '/vendor/three/GLTFLoader.js';
+const name = new URLSearchParams(location.search).get('m') || 'motorcycle-rider';
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0e14);
+const cam = new THREE.PerspectiveCamera(38, innerWidth/innerHeight, 0.01, 100);
+if (new URLSearchParams(location.search).get('cam') === 'top') { cam.position.set(0.01, 4, 0.01); cam.lookAt(0, 0.3, 0); }
+else { cam.position.set(1.7, 1.7, 2.3); cam.lookAt(0, 0.5, 0); }   // ~45° 俯角
+scene.add(new THREE.HemisphereLight(0xfff2d8, 0x223044, 1.7));
+const key = new THREE.DirectionalLight(0xffd6a1, 2.2); key.position.set(2,3,2.5); scene.add(key);
+const rim = new THREE.DirectionalLight(0x7fb2ff, 0.7); rim.position.set(-2,1,-2); scene.add(rim);
+scene.add(new THREE.GridHelper(4, 8, 0x3a6, 0x244));        // 地面网格
+scene.add(new THREE.AxesHelper(1.3));                        // 红=+X 绿=+Y(上) 蓝=+Z
+const arrow = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,0.04,0), 1.6, 0x33ffe0, 0.22, 0.13);
+scene.add(arrow);                                           // 青色箭头 = -Z = 约定的“车头应朝的方向”
+const info = document.getElementById('info');
+const playAnim = new URLSearchParams(location.search).get('anim') === '1';   // ?anim=1 播放第一个动画 clip
+let mixer = null; const animClock = new THREE.Clock();
+new GLTFLoader().load('/models/'+name+'.gltf', g => {
+  scene.add(g.scene);
+  window.__scene = scene; window.__root = g.scene; window.__THREE = THREE; window.__cam = cam;
+  const big = parseFloat(new URLSearchParams(location.search).get('big')) || 1;   // ?big=N 模拟 story.html 的大缩放
+  if (big !== 1) g.scene.scale.multiplyScalar(big);
+  if (g.animations && g.animations.length) {
+    window.__animNames = g.animations.map(a => a.name);
+    window.__animTracks = g.animations[0].tracks.map(t => t.name);   // 诊断：动画影响了哪些节点
+    if (playAnim) { mixer = new THREE.AnimationMixer(g.scene); mixer.clipAction(g.animations[0]).play(); }
+  }
+  const box = new THREE.Box3().setFromObject(g.scene), sz = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(sz.x, sz.y, sz.z) || 1;
+  // 自动取景：相机从 ~45° 俯角框住模型（适配任意尺寸）
+  const top = new URLSearchParams(location.search).get('cam') === 'top';
+  if (top) cam.position.set(c.x + 0.01, c.y + maxDim*2.4, c.z + 0.01);
+  else cam.position.set(c.x + maxDim*1.3, c.y + maxDim*1.2, c.z + maxDim*1.7);
+  cam.near = maxDim/200; cam.far = maxDim*200; cam.lookAt(c); cam.updateProjectionMatrix();
+  // 青箭头(-Z)挪到模型底部、按模型尺寸缩放
+  arrow.position.set(c.x, box.min.y, c.z); arrow.setLength(maxDim*1.1, maxDim*0.18, maxDim*0.11);
+  info.textContent = name+'  尺寸('+sz.x.toFixed(2)+','+sz.y.toFixed(2)+','+sz.z.toFixed(2)+')  底Y='+box.min.y.toFixed(2)+'  中心('+c.x.toFixed(1)+','+c.y.toFixed(1)+','+c.z.toFixed(1)+')  青箭头=-Z(车头应朝向)';
+  window.__ready = true;
+}, undefined, e => { info.textContent = '加载失败: '+(e && e.message || e); window.__ready = 'err'; });
+(function loop(){ if(mixer) mixer.update(animClock.getDelta()); renderer.render(scene, cam); requestAnimationFrame(loop); })();
+addEventListener('resize',()=>{ renderer.setSize(innerWidth,innerHeight); cam.aspect=innerWidth/innerHeight; cam.updateProjectionMatrix(); });
+</script></body></html>
