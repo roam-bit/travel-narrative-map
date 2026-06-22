@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-注意 / NOTE:
-本项目 models/akira/ 目录下的第三方 3D 模型遵循其自带的 CC-BY-4.0 许可，
-不适用本 MIT 协议，使用与再分发须保留原作者署名（见 models/akira/license.txt）。
-The 3rd-party 3D model under models/akira/ is licensed separately under
-CC-BY-4.0; see models/akira/license.txt and keep the original attribution.
